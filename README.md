@@ -7,6 +7,8 @@ maintainable catalog.
 
 ![Dashboard](docs/screenshot-dashboard.png)
 
+! [Log-in-page](docs/screenshot-login.png) 
+
 ---
 
 ## Features
