@@ -1,0 +1,29 @@
+# Maven build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE / editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+nbproject/
+*.swp
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Local runtime artefacts
+*.tmp
+covers/*.tmp
