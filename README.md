@@ -1,6 +1,7 @@
 # Balagtas DEIHS Library Management System
 
-A modern desktop library management system for **DEIHS**, built with
+Hello 👋 I'm Mc. 
+This a modern desktop library management system for **DEIHS**, I built with
 **JavaFX** and **MySQL/MariaDB**. I replace the old JavaSwing prototype with a
 clean dashboard, a visual book-cover collection, a borrowing desk, and a
 maintainable catalog.
