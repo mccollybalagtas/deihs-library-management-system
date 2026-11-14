@@ -10,6 +10,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
@@ -40,6 +41,9 @@ public class MainView extends BorderPane {
     private final Runnable onLogout;
 
     private final StackPane content = new StackPane();
+    private final StackPane toastLayer = new StackPane();
+    private final StackPane contentHost = new StackPane(content, toastLayer);
+    private final Toasts toasts = new Toasts(toastLayer);
     private final Label pageTitle = new Label();
     private final Label statusLabel = new Label();
     private final Map<String, Button> navButtons = new LinkedHashMap<>();
@@ -62,8 +66,8 @@ public class MainView extends BorderPane {
         content.setStyle("-fx-background-color: #F3F7FD;");
         content.setAlignment(Pos.TOP_LEFT);
 
-        VBox center = new VBox(buildTopBar(), content, buildFooter());
-        VBox.setVgrow(content, Priority.ALWAYS);
+        VBox center = new VBox(buildTopBar(), contentHost, buildFooter());
+        VBox.setVgrow(contentHost, Priority.ALWAYS);
         setCenter(center);
 
         navigate("dashboard");
@@ -84,6 +88,11 @@ public class MainView extends BorderPane {
 
     public void setStatus(String message) {
         statusLabel.setText("\u25CF  " + message);
+    }
+
+    /** Non-blocking success feedback shown above the page. */
+    public void toastSuccess(String message) {
+        toasts.success(message);
     }
 
     /** Asks for confirmation, then returns to the sign-in screen. */
@@ -189,6 +198,7 @@ public class MainView extends BorderPane {
         try {
             new BookDao().insert(book);
             setStatus("Added \"" + book.getTitle() + "\" to the catalog.");
+            toastSuccess("Added \"" + book.getTitle() + "\" to the catalog.");
             refreshData();
         } catch (DaoException ex) {
             Dialogs.error(stage, "Could not add the book", ex.getMessage());
@@ -301,20 +311,19 @@ public class MainView extends BorderPane {
         name.setFont(Font.font("SansSerif", FontWeight.BOLD, 12));
         name.setTextFill(Color.web("#1F2933"));
 
-        Label rolePill = new Label(user.getRole().label());
-        rolePill.getStyleClass().addAll("role-pill", "role-" + user.getRole().name().toLowerCase(Locale.ROOT));
-
         Label avatar = new Label(user.initial());
         avatar.getStyleClass().add("avatar");
+        avatar.setTooltip(new Tooltip(user.getRole().label()
+                + " \u2022 " + user.getDisplayName()));
 
         Button signOut = new Button("\u21A9  Sign out");
         signOut.getStyleClass().add("ghost-btn");
         signOut.setPrefHeight(32);
         signOut.setFocusTraversable(false);
         signOut.setOnAction(e -> confirmLogout());
-        signOut.setTooltip(new javafx.scene.control.Tooltip("Sign out"));
+        signOut.setTooltip(new Tooltip("Sign out"));
 
-        HBox bar = new HBox(10, pageTitle, spacer, date, name, rolePill, avatar, signOut);
+        HBox bar = new HBox(10, pageTitle, spacer, date, name, avatar, signOut);
         bar.getStyleClass().add("topbar");
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;

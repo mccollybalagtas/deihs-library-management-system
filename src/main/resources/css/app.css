@@ -409,3 +409,56 @@
 
 .win-close:hover { -fx-background-color: #D64545; }
 .win-close:hover .win-icon { -fx-stroke: white; }
+
+/* ---------- Toasts ---------- */
+.toast {
+    -fx-background-color: white;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-color: #D7E3F2;
+    -fx-padding: 11 16 11 14;
+    -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.22), 22, 0.14, 0, 8);
+}
+.toast-success { -fx-border-color: #A9E3C6; }
+.toast-info    { -fx-border-color: #B9D5F5; }
+.toast-error   { -fx-border-color: #F0B8B3; }
+
+.toast-icon {
+    -fx-min-width: 22;
+    -fx-min-height: 22;
+    -fx-background-radius: 20;
+    -fx-alignment: center;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+}
+.toast-success .toast-icon { -fx-background-color: #0F7D50; }
+.toast-info .toast-icon    { -fx-background-color: #17457F; }
+.toast-error .toast-icon   { -fx-background-color: #C0392B; }
+
+.toast-text { -fx-text-fill: #1F2933; -fx-font-size: 12px; }
+
+/* ---------- Empty states ---------- */
+.empty-state { -fx-background-color: transparent; }
+.empty-icon  { -fx-font-size: 30px; -fx-text-fill: #A9BCD3; }
+.empty-title { -fx-text-fill: #0D264C; }
+.empty-text  { -fx-text-fill: #667085; }
+
+/* ---------- Due-date urgency ---------- */
+.due-normal { -fx-text-fill: #0F7D50; -fx-font-weight: bold; -fx-font-size: 10.5px; }
+
+.table-row-cell.row-overdue {
+    -fx-border-color: transparent transparent #EEF2F7 #D64545;
+    -fx-border-width: 0 0 1 3;
+}
+.table-row-cell.row-soon {
+    -fx-border-color: transparent transparent #EEF2F7 #E0A32E;
+    -fx-border-width: 0 0 1 3;
+}
+.table-row-cell.row-out {
+    -fx-border-color: transparent transparent #EEF2F7 #7FB2E5;
+    -fx-border-width: 0 0 1 3;
+}
+.table-row-cell.row-overdue:selected { -fx-background-color: #FBE9E8; }
+.table-row-cell.row-soon:selected    { -fx-background-color: #FDF4E4; }
+.table-row-cell.row-out:selected     { -fx-background-color: #E8F1FD; }

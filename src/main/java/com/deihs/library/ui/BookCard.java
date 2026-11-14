@@ -51,11 +51,10 @@ public class BookCard extends VBox {
                 badgeRow());
 
         if (book.isBorrowed() && book.getDueAt() != null) {
-            Label due = new Label(book.isOverdue()
-                    ? book.loanStatusText()
-                    : "Due " + book.dueText());
-            due.getStyleClass().add(book.isOverdue() ? "due-overdue" : "due-soon");
+            Label due = new Label(book.dueRelativeText());
+            due.getStyleClass().add(book.dueUrgencyStyle());
             due.setMaxWidth(COVER_WIDTH);
+            Tooltip.install(due, new Tooltip("Due " + book.dueText()));
             getChildren().add(due);
         }
 
@@ -64,7 +63,8 @@ public class BookCard extends VBox {
             Tooltip.install(this, new Tooltip("Click to edit this book"));
         } else {
             Tooltip.install(this, new Tooltip(book.isBorrowed()
-                    ? book.loanStatusText()
+                    ? book.loanStatusText() + (book.getDueAt() == null
+                    ? "" : " \u2022 due " + book.dueText())
                     : "Available on the shelf"));
         }
     }

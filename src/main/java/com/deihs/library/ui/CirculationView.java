@@ -29,7 +29,9 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -179,11 +181,7 @@ public class CirculationView extends VBox {
         Button clear = new Button("Clear");
         clear.getStyleClass().add("ghost-btn");
         clear.setPrefHeight(40);
-        clear.setOnAction(e -> {
-            search.clear();
-            category.setValue("All Categories");
-            statusFilter.setValue(FILTER_ALL);
-        });
+        clear.setOnAction(e -> clearFilters());
 
         HBox row = new HBox(10, search, category, statusFilter, clear);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -193,9 +191,12 @@ public class CirculationView extends VBox {
     private Node buildTableCard() {
         table.getStyleClass().add("table-view");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(placeholder("No books match the current filters."));
+        table.setPlaceholder(EmptyState.host(new EmptyState("\u2315", "No books match these filters",
+                "Try a different search, category, or status \u2014 or clear the filters to see everything.")
+                .action("Clear filters", this::clearFilters)));
         table.setFixedCellSize(64);
         table.setPrefHeight(460);
+        BookRows.markUrgency(table);
 
         TableColumn<Book, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
@@ -239,10 +240,8 @@ public class CirculationView extends VBox {
                         ? "\u2014" : data.getValue().getBorrower()));
         borrowerCol.setMinWidth(130);
 
-        TableColumn<Book, String> dueCol = new TableColumn<>("Due");
-        dueCol.setCellValueFactory(data -> new SimpleStringProperty(
-                data.getValue().isBorrowed() ? data.getValue().dueText() : "\u2014"));
-        dueCol.setMinWidth(95);
+        TableColumn<Book, String> dueCol = DueColumn.create("Due");
+        dueCol.setMinWidth(115);
 
         TableColumn<Book, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(data -> new SimpleStringProperty(
@@ -330,13 +329,10 @@ public class CirculationView extends VBox {
         return card;
     }
 
-    private Node placeholder(String message) {
-        Label label = new Label(message);
-        label.getStyleClass().add("muted");
-        label.setFont(Font.font("SansSerif", 12));
-        StackPane pane = new StackPane(label);
-        pane.setPadding(new Insets(40));
-        return pane;
+    private void clearFilters() {
+        search.clear();
+        category.setValue("All Categories");
+        statusFilter.setValue(FILTER_ALL);
     }
 
     // ------------------------------------------------------------------
@@ -418,6 +414,11 @@ public class CirculationView extends VBox {
                 }
                 filtered.add(book);
             }
+            filtered.sort(Comparator
+                    .comparingInt(CirculationView::urgencyRank)
+                    .thenComparing(book -> book.getDueAt() == null
+                            ? LocalDateTime.MAX : book.getDueAt())
+                    .thenComparing(Book::getTitle, String.CASE_INSENSITIVE_ORDER));
             rows.setAll(filtered);
             long borrowed = filtered.stream().filter(Book::isBorrowed).count();
             countLabel.setText(filtered.size() + (filtered.size() == 1 ? " title" : " titles")
@@ -425,6 +426,17 @@ public class CirculationView extends VBox {
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load circulation", ex.getMessage());
         }
+    }
+
+    /** Overdue first, then due soon, then other loans, then available titles. */
+    private static int urgencyRank(Book book) {
+        if (book.isOverdue()) {
+            return 0;
+        }
+        if (book.isDueSoon()) {
+            return 1;
+        }
+        return book.isBorrowed() ? 2 : 3;
     }
 
     // ------------------------------------------------------------------
@@ -468,6 +480,8 @@ public class CirculationView extends VBox {
             }
             main.setStatus("Issued \"" + book.getTitle() + "\" to " + student.displayName()
                     + " \u2022 due " + due);
+            main.toastSuccess("Issued \"" + book.getTitle() + "\" to " + student.displayName()
+                    + " \u2022 due " + due);
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not issue the book", ex.getMessage());
@@ -486,6 +500,9 @@ public class CirculationView extends VBox {
             String who = book.getBorrower() == null || book.getBorrower().isBlank()
                     ? null : book.getBorrower();
             main.setStatus(who == null
+                    ? "Returned \"" + book.getTitle() + "\" to the shelves."
+                    : "Returned \"" + book.getTitle() + "\" from " + who + ".");
+            main.toastSuccess(who == null
                     ? "Returned \"" + book.getTitle() + "\" to the shelves."
                     : "Returned \"" + book.getTitle() + "\" from " + who + ".");
             refresh();

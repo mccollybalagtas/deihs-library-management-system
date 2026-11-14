@@ -172,6 +172,37 @@ public class Book {
     }
 
     /**
+     * Short relative wording for a due date: "Due in 3 days",
+     * "Due today" or "2 days overdue". Falls back to an em dash when the
+     * book is not on loan.
+     */
+    public String dueRelativeText() {
+        if (!borrowed || dueAt == null) {
+            return "\u2014";
+        }
+        long days = daysUntilDue();
+        if (days < 0) {
+            long late = Math.abs(days);
+            return late + (late == 1 ? " day overdue" : " days overdue");
+        }
+        if (days == 0) {
+            return "Due today";
+        }
+        return "Due in " + days + (days == 1 ? " day" : " days");
+    }
+
+    /** CSS class that colours a relative due date by urgency. */
+    public String dueUrgencyStyle() {
+        if (isOverdue()) {
+            return "due-overdue";
+        }
+        if (isDueSoon()) {
+            return "due-soon";
+        }
+        return "due-normal";
+    }
+
+    /**
      * Status wording used by the circulation and loan tables:
      * Available, Overdue, Due today, Due in N days or Borrowed.
      */

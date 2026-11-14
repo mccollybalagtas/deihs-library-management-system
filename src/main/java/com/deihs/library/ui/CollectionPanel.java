@@ -15,6 +15,7 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 
@@ -28,7 +29,7 @@ public class CollectionPanel extends VBox {
 
     private final FlowPane grid = new FlowPane();
     private final Label countLabel = new Label();
-    private final Label emptyLabel = new Label("No books match your search.");
+    private final StackPane emptyHost = new StackPane();
     private final TextField search = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
 
@@ -92,10 +93,7 @@ public class CollectionPanel extends VBox {
         Button clear = new Button("Clear");
         clear.getStyleClass().add("ghost-btn");
         clear.setPrefHeight(40);
-        clear.setOnAction(e -> {
-            search.clear();
-            category.setValue("All Categories");
-        });
+        clear.setOnAction(e -> clearFilters());
 
         HBox row = new HBox(10, search, category, clear);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -109,10 +107,10 @@ public class CollectionPanel extends VBox {
         grid.setAlignment(Pos.TOP_LEFT);
         grid.setPadding(new Insets(4, 2, 12, 2));
 
-        emptyLabel.getStyleClass().add("muted");
-        emptyLabel.setFont(Font.font("SansSerif", 12));
+        emptyHost.setAlignment(Pos.TOP_CENTER);
+        emptyHost.setPadding(new Insets(30, 0, 0, 0));
 
-        VBox area = new VBox(12, grid, emptyLabel);
+        VBox area = new VBox(12, grid, emptyHost);
         area.setPadding(new Insets(2, 0, 0, 0));
 
         ScrollPane scroll = new ScrollPane(area);
@@ -148,12 +146,36 @@ public class CollectionPanel extends VBox {
             countLabel.setText(books.size() + (books.size() == 1 ? " title" : " titles"));
 
             boolean empty = books.isEmpty();
-            emptyLabel.setVisible(empty);
-            emptyLabel.setManaged(empty);
+            emptyHost.getChildren().setAll(emptyState());
+            emptyHost.setVisible(empty);
+            emptyHost.setManaged(empty);
             grid.setVisible(!empty);
             grid.setManaged(!empty);
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load books", ex.getMessage());
         }
+    }
+
+    private void clearFilters() {
+        search.clear();
+        category.setValue("All Categories");
+    }
+
+    private EmptyState emptyState() {
+        String query = search.getText() == null ? "" : search.getText().trim();
+        boolean filtered = !query.isEmpty()
+                || (category.getValue() != null && !"All Categories".equals(category.getValue()));
+        if (filtered) {
+            return new EmptyState("\u2315", "No titles match",
+                    "Try a shorter search, a different category, or clear the filters to see every book.")
+                    .action("Clear filters", this::clearFilters);
+        }
+        if (main.role().canManageBooks()) {
+            return new EmptyState("\u25A4", "The shelves are empty",
+                    "Add the first title and its cover to start the collection.")
+                    .action("+  Add Book", main::addBook);
+        }
+        return new EmptyState("\u25A4", "No books yet",
+                "The library has not added any titles. Check back soon.");
     }
 }

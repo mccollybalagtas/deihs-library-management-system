@@ -20,7 +20,6 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -113,10 +112,7 @@ public class CatalogView extends VBox {
         Button clear = new Button("Clear");
         clear.getStyleClass().add("ghost-btn");
         clear.setPrefHeight(40);
-        clear.setOnAction(e -> {
-            search.clear();
-            category.setValue("All Categories");
-        });
+        clear.setOnAction(e -> clearFilters());
 
         HBox row = new HBox(10, search, category, clear);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -126,9 +122,7 @@ public class CatalogView extends VBox {
     private Node buildTableCard() {
         table.getStyleClass().add("table-view");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(placeholder(main.role().canManageBooks()
-                ? "The catalog is empty. Use \u201CAdd Book\u201D to start it."
-                : "The catalog is empty."));
+        table.setPlaceholder(EmptyState.host(catalogEmptyState()));
         table.setFixedCellSize(64);
         table.setPrefHeight(460);
 
@@ -175,10 +169,8 @@ public class CatalogView extends VBox {
                 data.getValue().getExtraInfo() == null ? "\u2014" : data.getValue().getExtraInfo()));
         detailsCol.setMinWidth(95);
 
-        TableColumn<Book, String> dueCol = new TableColumn<>("Due");
-        dueCol.setCellValueFactory(data -> new SimpleStringProperty(
-                data.getValue().isBorrowed() ? data.getValue().dueText() : "\u2014"));
-        dueCol.setMinWidth(95);
+        TableColumn<Book, String> dueCol = DueColumn.create("Due");
+        dueCol.setMinWidth(115);
 
         TableColumn<Book, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(data -> new SimpleStringProperty(
@@ -249,13 +241,27 @@ public class CatalogView extends VBox {
         return card;
     }
 
-    private Node placeholder(String message) {
-        Label label = new Label(message);
-        label.getStyleClass().add("muted");
-        label.setFont(Font.font("SansSerif", 12));
-        StackPane pane = new StackPane(label);
-        pane.setPadding(new Insets(40));
-        return pane;
+    private void clearFilters() {
+        search.clear();
+        category.setValue("All Categories");
+    }
+
+    private EmptyState catalogEmptyState() {
+        String query = search.getText() == null ? "" : search.getText().trim();
+        boolean filtered = !query.isEmpty()
+                || (category.getValue() != null && !"All Categories".equals(category.getValue()));
+        if (filtered) {
+            return new EmptyState("\u2315", "No titles match",
+                    "Try a broader search term or a different category.")
+                    .action("Clear filters", this::clearFilters);
+        }
+        if (main.role().canManageBooks()) {
+            return new EmptyState("\u25A4", "The catalog is empty",
+                    "Add the first title to start building the collection.")
+                    .action("+  Add Book", main::addBook);
+        }
+        return new EmptyState("\u25A4", "The catalog is empty",
+                "No titles have been added yet. Check back soon.");
     }
 
     // ------------------------------------------------------------------
@@ -281,6 +287,7 @@ public class CatalogView extends VBox {
         try {
             List<Book> books = dao.search(search.getText(), category.getValue());
             rows.setAll(books);
+            table.setPlaceholder(EmptyState.host(catalogEmptyState()));
             countLabel.setText(books.size() + (books.size() == 1 ? " title in the catalog" : " titles in the catalog"));
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load the catalog", ex.getMessage());
@@ -298,6 +305,7 @@ public class CatalogView extends VBox {
         try {
             dao.update(edited);
             main.setStatus("Saved changes to \"" + edited.getTitle() + "\".");
+            main.toastSuccess("Saved changes to \"" + edited.getTitle() + "\".");
             main.refreshData();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not save the book", ex.getMessage());
@@ -318,6 +326,7 @@ public class CatalogView extends VBox {
             dao.delete(book.getId());
             Covers.delete(book.getCoverFile());
             main.setStatus("Removed \"" + book.getTitle() + "\" from the catalog.");
+            main.toastSuccess("Removed \"" + book.getTitle() + "\" from the catalog.");
             main.refreshData();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not remove the book", ex.getMessage());

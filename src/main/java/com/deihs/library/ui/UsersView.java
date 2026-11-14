@@ -29,7 +29,6 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -130,7 +129,7 @@ public class UsersView extends VBox {
     private Node buildTableCard() {
         table.getStyleClass().add("table-view");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(placeholder("No accounts match your search."));
+        table.setPlaceholder(EmptyState.host(accountsEmptyState()));
         table.setFixedCellSize(64);
         table.setPrefHeight(460);
 
@@ -273,13 +272,16 @@ public class UsersView extends VBox {
         return card;
     }
 
-    private Node placeholder(String message) {
-        Label label = new Label(message);
-        label.getStyleClass().add("muted");
-        label.setFont(Font.font("SansSerif", 12));
-        StackPane pane = new StackPane(label);
-        pane.setPadding(new Insets(40));
-        return pane;
+    private EmptyState accountsEmptyState() {
+        String query = search.getText() == null ? "" : search.getText().trim();
+        if (!query.isEmpty()) {
+            return new EmptyState("\u2315", "No accounts match \u201C" + query + "\u201D",
+                    "Search checks names, usernames, roles, and status. Try a shorter term.")
+                    .action("Clear search", search::clear);
+        }
+        return new EmptyState("\u263A", "No accounts yet",
+                "Create the first account so someone can sign in.")
+                .action("+  New Account", this::createAccount);
     }
 
     // ------------------------------------------------------------------
@@ -319,6 +321,7 @@ public class UsersView extends VBox {
             }
         }
         rows.setAll(filtered);
+        table.setPlaceholder(EmptyState.host(accountsEmptyState()));
     }
 
     private VBox statCard(String title, String value, String styleClass) {
@@ -371,6 +374,8 @@ public class UsersView extends VBox {
             dao.create(draft.username(), draft.displayName(), draft.password(), draft.role());
             main.setStatus("Created the " + draft.role().label().toLowerCase(Locale.ROOT)
                     + " account \"" + draft.username().trim().toLowerCase(Locale.ROOT) + "\".");
+            main.toastSuccess("Created the " + draft.role().label().toLowerCase(Locale.ROOT)
+                    + " account \"" + draft.username().trim().toLowerCase(Locale.ROOT) + "\".");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not create the account", ex.getMessage());
@@ -397,6 +402,8 @@ public class UsersView extends VBox {
             dao.setRole(account.id(), chosen);
             main.setStatus(account.displayName() + " is now a "
                     + chosen.label().toLowerCase(Locale.ROOT) + ".");
+            main.toastSuccess(account.displayName() + " is now a "
+                    + chosen.label().toLowerCase(Locale.ROOT) + ".");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not change the role", ex.getMessage());
@@ -412,6 +419,8 @@ public class UsersView extends VBox {
             dao.resetPassword(account.id(), account.username(), password);
             main.setStatus("Reset the password for " + account.displayName()
                     + ". Their lockout was cleared.");
+            main.toastSuccess("Reset the password for " + account.displayName()
+                    + ". Their lockout was cleared.");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not reset the password", ex.getMessage());
@@ -422,6 +431,7 @@ public class UsersView extends VBox {
         try {
             dao.unlock(account.id());
             main.setStatus("Unlocked " + account.displayName() + "'s account.");
+            main.toastSuccess("Unlocked " + account.displayName() + "'s account.");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not unlock the account", ex.getMessage());
@@ -452,6 +462,7 @@ public class UsersView extends VBox {
         try {
             dao.setActive(account.id(), enable);
             main.setStatus((enable ? "Enabled " : "Disabled ") + account.displayName() + "'s account.");
+            main.toastSuccess((enable ? "Enabled " : "Disabled ") + account.displayName() + "'s account.");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not update the account", ex.getMessage());
@@ -478,6 +489,7 @@ public class UsersView extends VBox {
         try {
             dao.delete(account.id());
             main.setStatus("Deleted the account for " + account.displayName() + ".");
+            main.toastSuccess("Deleted the account for " + account.displayName() + ".");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not delete the account", ex.getMessage());

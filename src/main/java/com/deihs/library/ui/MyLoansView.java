@@ -152,9 +152,10 @@ public class MyLoansView extends VBox {
 
         myTable.getStyleClass().add("table-view");
         myTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        myTable.setPlaceholder(placeholder("You have not borrowed any books yet."));
+        myTable.setPlaceholder(EmptyState.host(myEmptyState()));
         myTable.setFixedCellSize(64);
         myTable.setPrefHeight(220);
+        BookRows.markUrgency(myTable);
 
         TableColumn<Book, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
@@ -192,9 +193,8 @@ public class MyLoansView extends VBox {
                 format(data.getValue().getBorrowedAt())));
         borrowedCol.setMinWidth(100);
 
-        TableColumn<Book, String> dueCol = new TableColumn<>("Due");
-        dueCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().dueText()));
-        dueCol.setMinWidth(105);
+        TableColumn<Book, String> dueCol = DueColumn.create("Due");
+        dueCol.setMinWidth(120);
 
         TableColumn<Book, String> statusCol = new TableColumn<>("Status");
         statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().loanStatusText()));
@@ -272,7 +272,7 @@ public class MyLoansView extends VBox {
 
         availableTable.getStyleClass().add("table-view");
         availableTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        availableTable.setPlaceholder(placeholder("No available books match your search."));
+        availableTable.setPlaceholder(EmptyState.host(availableEmptyState()));
         availableTable.setFixedCellSize(64);
         availableTable.setPrefHeight(220);
 
@@ -361,13 +361,38 @@ public class MyLoansView extends VBox {
         return card;
     }
 
-    private Node placeholder(String message) {
-        Label label = new Label(message);
-        label.getStyleClass().add("muted");
-        label.setFont(Font.font("SansSerif", 12));
-        StackPane pane = new StackPane(label);
-        pane.setPadding(new Insets(30));
-        return pane;
+    private EmptyState myEmptyState() {
+        return new EmptyState("\u21C4", "No books on your shelf yet",
+                "Borrow a title from the list below and it will appear here with its due date.")
+                .action("Browse available books", this::focusAvailable);
+    }
+
+    private EmptyState availableEmptyState() {
+        String query = search.getText() == null ? "" : search.getText().trim();
+        if (!query.isEmpty()) {
+            return new EmptyState("\u2315", "No matches for \u201C" + query + "\u201D",
+                    "Try a shorter title, another author, or a different spelling.")
+                    .action("Clear search", search::clear);
+        }
+        if (atLimit) {
+            return new EmptyState("\u2713", "Your shelf is full",
+                    "You already hold " + Book.MAX_LOANS + " books. Return one to borrow another.")
+                    .action("Go to my books", this::focusMine);
+        }
+        return new EmptyState("\u25A4", "Every title is out on loan",
+                "All copies are currently with other readers. Check back after a return.");
+    }
+
+    private void focusAvailable() {
+        availableTable.requestFocus();
+        availableTable.getSelectionModel().clearSelection();
+        availableTable.scrollTo(0);
+    }
+
+    private void focusMine() {
+        myTable.requestFocus();
+        myTable.getSelectionModel().clearSelection();
+        myTable.scrollTo(0);
     }
 
     // ------------------------------------------------------------------
@@ -417,6 +442,7 @@ public class MyLoansView extends VBox {
             availableRows.setAll(available);
             availableCount.setText(available.size()
                     + (available.size() == 1 ? " title available" : " titles available"));
+            availableTable.setPlaceholder(EmptyState.host(availableEmptyState()));
             availableTable.refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load the shelves", ex.getMessage());
@@ -447,6 +473,7 @@ public class MyLoansView extends VBox {
                 return;
             }
             main.setStatus("Borrowed \"" + book.getTitle() + "\" \u2022 due " + due);
+            main.toastSuccess("Borrowed \"" + book.getTitle() + "\" \u2022 due " + due);
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not borrow the book", ex.getMessage());
@@ -463,6 +490,7 @@ public class MyLoansView extends VBox {
                 return;
             }
             main.setStatus("Returned \"" + book.getTitle() + "\" to the shelves.");
+            main.toastSuccess("Returned \"" + book.getTitle() + "\" to the shelves.");
             refresh();
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not return the book", ex.getMessage());
