@@ -13,6 +13,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -72,6 +75,15 @@ public class MainView extends BorderPane {
 
         navigate("dashboard");
         setStatus("Signed in as " + user.getDisplayName() + " \u2022 " + user.getRole().label());
+
+        // Ctrl+F (Cmd+F on macOS) jumps to the search box on the open page.
+        sceneProperty().addListener((o, old, scene) -> {
+            if (scene != null) {
+                scene.getAccelerators().put(
+                        new KeyCodeCombination(KeyCode.F, KeyCombination.SHORTCUT_DOWN),
+                        this::focusSearch);
+            }
+        });
     }
 
     public Window window() {
@@ -93,6 +105,52 @@ public class MainView extends BorderPane {
     /** Non-blocking success feedback shown above the page. */
     public void toastSuccess(String message) {
         toasts.success(message);
+    }
+
+    /** Non-blocking error feedback shown above the page. */
+    public void toastError(String message) {
+        toasts.error(message);
+    }
+
+    /** Non-blocking neutral feedback shown above the page. */
+    public void toastInfo(String message) {
+        toasts.info(message);
+    }
+
+    /** Focuses the search box on whichever page is open. */
+    public void focusSearch() {
+        switch (currentKey) {
+            case "collection" -> {
+                if (collection != null) {
+                    collection.focusSearch();
+                }
+            }
+            case "circulation" -> {
+                if (circulation != null) {
+                    circulation.focusSearch();
+                }
+            }
+            case "myloans" -> {
+                if (myLoans != null) {
+                    myLoans.focusSearch();
+                }
+            }
+            case "catalog" -> {
+                if (catalog != null) {
+                    catalog.focusSearch();
+                }
+            }
+            case "users" -> {
+                if (users != null) {
+                    users.focusSearch();
+                }
+            }
+            default -> {
+                if (dashboard != null) {
+                    dashboard.focusSearch();
+                }
+            }
+        }
     }
 
     /** Asks for confirmation, then returns to the sign-in screen. */

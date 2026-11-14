@@ -27,6 +27,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -55,6 +56,7 @@ public class CirculationView extends VBox {
     private final ObservableList<Book> rows = FXCollections.observableArrayList();
     private final TableView<Book> table = new TableView<>(rows);
     private final TextField search = new TextField();
+    private final TextField scan = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
     private final ComboBox<String> statusFilter = new ComboBox<>();
     private final ComboBox<UserDao.Account> studentPicker = new ComboBox<>();
@@ -62,6 +64,7 @@ public class CirculationView extends VBox {
     private final Label countLabel = new Label();
     private final Label hintLabel = new Label();
     private final Label studentHint = new Label();
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::reloadRows);
 
     private boolean updatingFilters;
     private boolean loansAtLimit;
@@ -110,6 +113,17 @@ public class CirculationView extends VBox {
     }
 
     private Node buildDeskRow() {
+        Label scanLabel = new Label("Scan");
+        scanLabel.getStyleClass().add("field-label");
+
+        scan.setPromptText("Book ID\u2026");
+        scan.getStyleClass().addAll("field", "scan-field");
+        scan.setPrefWidth(150);
+        scan.setPrefHeight(38);
+        scan.setTooltip(new Tooltip("Scan or type a book ID and press Enter.\n"
+                + "Available books are issued to the chosen student; on-loan books are returned."));
+        scan.setOnAction(e -> scanBook());
+
         Label studentLabel = new Label("Issue to");
         studentLabel.getStyleClass().add("field-label");
 
@@ -146,7 +160,7 @@ public class CirculationView extends VBox {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox row = new HBox(10, studentLabel, studentPicker, dueLabel, duePicker, spacer, studentHint);
+        HBox row = new HBox(10, scanLabel, scan, studentLabel, studentPicker, dueLabel, duePicker, spacer, studentHint);
         row.setAlignment(Pos.CENTER_LEFT);
         row.getStyleClass().add("desk-bar");
         row.setPadding(new Insets(12, 14, 12, 14));
@@ -158,7 +172,7 @@ public class CirculationView extends VBox {
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.setMaxWidth(Double.MAX_VALUE);
-        search.textProperty().addListener((o, a, b) -> reloadRows());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
         HBox.setHgrow(search, Priority.ALWAYS);
 
         category.getStyleClass().add("combo-box");
@@ -335,6 +349,12 @@ public class CirculationView extends VBox {
         statusFilter.setValue(FILTER_ALL);
     }
 
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
+    }
+
     // ------------------------------------------------------------------
     // Data
     // ------------------------------------------------------------------
@@ -443,23 +463,69 @@ public class CirculationView extends VBox {
     // Actions
     // ------------------------------------------------------------------
 
-    private void issueBook(Book book) {
+    /**
+     * Handles a barcode scan or typed book ID. On-loan copies are returned;
+     * available copies are issued to the student chosen above.
+     */
+    private void scanBook() {
+        String raw = scan.getText() == null ? "" : scan.getText().trim();
+        if (raw.isEmpty()) {
+            return;
+        }
+        int id;
+        try {
+            id = Integer.parseInt(raw);
+        } catch (NumberFormatException ex) {
+            main.toastError("Book IDs are numbers \u2014 scan the label or type the ID shown in the catalog.");
+            scan.selectAll();
+            return;
+        }
+        Book book;
+        try {
+            book = dao.findById(id);
+        } catch (DaoException ex) {
+            Dialogs.error(main.window(), "Could not look up that book", ex.getMessage());
+            return;
+        }
+        if (book == null) {
+            main.toastError("No book has ID " + id + ". Check the label and try again.");
+            scan.selectAll();
+            return;
+        }
+        boolean handled;
+        if (book.isBorrowed()) {
+            handled = returnBook(book);
+        } else if (studentPicker.getValue() == null) {
+            main.toastError("Choose a student first, then scan \"" + book.getTitle() + "\".");
+            studentPicker.requestFocus();
+            scan.selectAll();
+            return;
+        } else {
+            handled = issueBook(book);
+        }
+        if (handled) {
+            scan.clear();
+        }
+        javafx.application.Platform.runLater(scan::requestFocus);
+    }
+
+    private boolean issueBook(Book book) {
         UserDao.Account student = studentPicker.getValue();
         if (student == null) {
             Dialogs.error(main.window(), "Choose a student",
                     "Select the student who is borrowing the book first.");
-            return;
+            return false;
         }
         LocalDate due = duePicker.getValue();
         if (due == null) {
             Dialogs.error(main.window(), "Choose a due date",
                     "Pick the date the book must be returned.");
-            return;
+            return false;
         }
         if (due.isBefore(LocalDate.now())) {
             Dialogs.error(main.window(), "Due date is in the past",
                     "Choose today or a later date for the due date.");
-            return;
+            return false;
         }
         try {
             int count = dao.countByBorrower(student.id());
@@ -468,7 +534,7 @@ public class CirculationView extends VBox {
                         student.displayName() + " already has " + count + " of "
                                 + Book.MAX_LOANS + " allowed books.\n"
                                 + "Return one before issuing another.");
-                return;
+                return false;
             }
             boolean ok = dao.checkout(book.getId(), student.id(), student.displayName(),
                     due.atTime(23, 59));
@@ -476,26 +542,28 @@ public class CirculationView extends VBox {
                 Dialogs.error(main.window(), "Book already on loan",
                         "\"" + book.getTitle() + "\" was just issued to another reader.");
                 refresh();
-                return;
+                return false;
             }
             main.setStatus("Issued \"" + book.getTitle() + "\" to " + student.displayName()
                     + " \u2022 due " + due);
             main.toastSuccess("Issued \"" + book.getTitle() + "\" to " + student.displayName()
                     + " \u2022 due " + due);
             refresh();
+            return true;
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not issue the book", ex.getMessage());
+            return false;
         }
     }
 
-    private void returnBook(Book book) {
+    private boolean returnBook(Book book) {
         try {
             boolean ok = dao.checkin(book.getId());
             if (!ok) {
                 Dialogs.error(main.window(), "Already returned",
                         "\"" + book.getTitle() + "\" is no longer on loan.");
                 refresh();
-                return;
+                return false;
             }
             String who = book.getBorrower() == null || book.getBorrower().isBlank()
                     ? null : book.getBorrower();
@@ -506,8 +574,10 @@ public class CirculationView extends VBox {
                     ? "Returned \"" + book.getTitle() + "\" to the shelves."
                     : "Returned \"" + book.getTitle() + "\" from " + who + ".");
             refresh();
+            return true;
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not return the book", ex.getMessage());
+            return false;
         }
     }
 }

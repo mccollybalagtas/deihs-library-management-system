@@ -27,6 +27,15 @@
 }
 .field:focused { -fx-border-color: #17457F; }
 
+/* Scanner input at the circulation desk: warmer tint so it stands apart. */
+.scan-field {
+    -fx-background-color: #FFFCF2;
+    -fx-border-color: #E2B84A;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+}
+.scan-field:focused { -fx-border-color: #C9921B; }
+
 .field-label {
     -fx-font-size: 10px;
     -fx-font-weight: bold;

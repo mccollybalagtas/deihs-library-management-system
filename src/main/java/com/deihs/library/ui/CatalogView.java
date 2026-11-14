@@ -23,6 +23,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ public class CatalogView extends VBox {
     private final TextField search = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
     private final Label countLabel = new Label();
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::reloadRows);
 
     private boolean updatingFilters;
 
@@ -96,7 +98,7 @@ public class CatalogView extends VBox {
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.setMaxWidth(Double.MAX_VALUE);
-        search.textProperty().addListener((o, a, b) -> reloadRows());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
         HBox.setHgrow(search, Priority.ALWAYS);
 
         category.getStyleClass().add("combo-box");
@@ -283,6 +285,12 @@ public class CatalogView extends VBox {
         reloadRows();
     }
 
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
+    }
+
     private void reloadRows() {
         try {
             List<Book> books = dao.search(search.getText(), category.getValue());
@@ -316,14 +324,30 @@ public class CatalogView extends VBox {
         if (book == null || !main.role().canManageBooks()) {
             return;
         }
-        boolean confirmed = Dialogs.confirm(main.window(), "Remove book",
+        if (book.isBorrowed()) {
+            String who = book.getBorrower() == null || book.getBorrower().isBlank()
+                    ? "a reader" : book.getBorrower();
+            Dialogs.error(main.window(), "Book is on loan",
+                    "\"" + book.getTitle() + "\" is currently with " + who + ".\n\n"
+                            + "Return it from the circulation desk before removing it.");
+            return;
+        }
+        boolean confirmed = Dialogs.confirmDestructive(main.window(), "Remove book",
                 "Remove \"" + book.getTitle() + "\" from the catalog?\n\n"
-                        + "This also deletes its cover image. This cannot be undone.");
+                        + "Its cover image is deleted too. This cannot be undone.",
+                "Remove book");
         if (!confirmed) {
             return;
         }
         try {
-            dao.delete(book.getId());
+            boolean removed = dao.delete(book.getId());
+            if (!removed) {
+                Dialogs.error(main.window(), "Could not remove the book",
+                        "\"" + book.getTitle() + "\" was just issued to a reader.\n"
+                                + "Return it first, then try again.");
+                main.refreshData();
+                return;
+            }
             Covers.delete(book.getCoverFile());
             main.setStatus("Removed \"" + book.getTitle() + "\" from the catalog.");
             main.toastSuccess("Removed \"" + book.getTitle() + "\" from the catalog.");

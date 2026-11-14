@@ -24,6 +24,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -50,6 +51,7 @@ public class MyLoansView extends VBox {
     private final TableView<Book> myTable = new TableView<>(myRows);
     private final TableView<Book> availableTable = new TableView<>(availableRows);
     private final TextField search = new TextField();
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::reloadAvailable);
     private final Label myCount = new Label();
     private final Label availableCount = new Label();
     private final Label limitNote = new Label();
@@ -261,7 +263,7 @@ public class MyLoansView extends VBox {
         search.getStyleClass().add("field");
         search.setPrefHeight(34);
         search.setPrefWidth(240);
-        search.textProperty().addListener((o, a, b) -> reloadAvailable());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -398,6 +400,12 @@ public class MyLoansView extends VBox {
     // ------------------------------------------------------------------
     // Data
     // ------------------------------------------------------------------
+
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
+    }
 
     public void refresh() {
         try {

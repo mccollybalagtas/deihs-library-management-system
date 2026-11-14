@@ -1,6 +1,9 @@
 package com.deihs.library.ui;
 
+import javafx.scene.Node;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.DialogPane;
 import javafx.stage.Window;
@@ -31,6 +34,37 @@ public final class Dialogs {
         style(alert.getDialogPane());
         Optional<ButtonType> answer = alert.showAndWait();
         return answer.isPresent() && answer.get() == ButtonType.YES;
+    }
+
+    /**
+     * Confirmation for an action that cannot be undone.
+     *
+     * <p>Cancel is the default button, so a stray Enter cannot delete
+     * anything, and the confirm button is painted with the danger style.</p>
+     */
+    public static boolean confirmDestructive(Window owner, String title, String message,
+                                             String confirmLabel) {
+        ButtonType confirm = new ButtonType(confirmLabel, ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, cancel, confirm);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
+        DialogPane pane = alert.getDialogPane();
+        style(pane);
+
+        Node confirmNode = pane.lookupButton(confirm);
+        confirmNode.getStyleClass().add("danger-btn");
+
+        Node cancelNode = pane.lookupButton(cancel);
+        if (cancelNode instanceof Button button) {
+            button.setDefaultButton(true);
+        }
+
+        Optional<ButtonType> answer = alert.showAndWait();
+        return answer.isPresent() && answer.get() == confirm;
     }
 
     private static void show(Window owner, Alert.AlertType type, String title, String message) {

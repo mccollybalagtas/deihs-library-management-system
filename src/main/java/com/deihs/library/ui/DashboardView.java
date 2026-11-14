@@ -21,6 +21,7 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,7 @@ public class DashboardView extends ScrollPane {
     private final StackPane emptyHost = new StackPane();
     private final TextField search = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::refreshGrid);
 
     private boolean updatingFilters;
 
@@ -106,7 +108,7 @@ public class DashboardView extends ScrollPane {
                 : "Search by title, author, or category\u2026");
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
-        search.textProperty().addListener((o, a, b) -> refreshGrid());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
         HBox.setHgrow(search, Priority.ALWAYS);
         search.setMaxWidth(Double.MAX_VALUE);
 
@@ -194,6 +196,12 @@ public class DashboardView extends ScrollPane {
     // ------------------------------------------------------------------
     // Data
     // ------------------------------------------------------------------
+
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
+    }
 
     public void refresh() {
         try {

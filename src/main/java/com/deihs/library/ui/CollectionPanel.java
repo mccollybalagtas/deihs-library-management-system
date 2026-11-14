@@ -18,6 +18,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
+import javafx.util.Duration;
 
 import java.util.List;
 
@@ -32,6 +33,7 @@ public class CollectionPanel extends VBox {
     private final StackPane emptyHost = new StackPane();
     private final TextField search = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::refreshGrid);
 
     private boolean updatingFilters;
 
@@ -77,7 +79,7 @@ public class CollectionPanel extends VBox {
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.setMaxWidth(Double.MAX_VALUE);
-        search.textProperty().addListener((o, a, b) -> refreshGrid());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
         HBox.setHgrow(search, Priority.ALWAYS);
 
         category.getStyleClass().add("combo-box");
@@ -159,6 +161,12 @@ public class CollectionPanel extends VBox {
     private void clearFilters() {
         search.clear();
         category.setValue("All Categories");
+    }
+
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
     }
 
     private EmptyState emptyState() {

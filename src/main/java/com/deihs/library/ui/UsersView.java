@@ -32,6 +32,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 import javafx.util.StringConverter;
 
 import java.time.LocalDateTime;
@@ -61,6 +62,7 @@ public class UsersView extends VBox {
     private final TextField search = new TextField();
     private final Label countLabel = new Label();
     private final HBox statsRow = new HBox(12);
+    private final Debounce searchDebounce = new Debounce(Duration.millis(220), this::applyFilter);
 
     private List<UserDao.Account> all = new ArrayList<>();
 
@@ -113,7 +115,7 @@ public class UsersView extends VBox {
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.setMaxWidth(Double.MAX_VALUE);
-        search.textProperty().addListener((o, a, b) -> applyFilter());
+        search.textProperty().addListener((o, a, b) -> searchDebounce.trigger());
         HBox.setHgrow(search, Priority.ALWAYS);
 
         Button clear = new Button("Clear");
@@ -287,6 +289,12 @@ public class UsersView extends VBox {
     // ------------------------------------------------------------------
     // Data
     // ------------------------------------------------------------------
+
+    /** Ctrl+F jumps to this page's search box. */
+    public void focusSearch() {
+        search.requestFocus();
+        search.selectAll();
+    }
 
     public void refresh() {
         try {
@@ -481,9 +489,10 @@ public class UsersView extends VBox {
                             + "Promote another account before deleting this one.");
             return;
         }
-        if (!Dialogs.confirm(main.window(), "Delete account",
+        if (!Dialogs.confirmDestructive(main.window(), "Delete account",
                 "Permanently delete the account for \"" + account.displayName() + "\" ("
-                        + account.username() + ")?\n\nThis cannot be undone.")) {
+                        + account.username() + ")?\n\nThis cannot be undone.",
+                "Delete account")) {
             return;
         }
         try {

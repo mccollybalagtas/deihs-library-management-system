@@ -130,11 +130,33 @@ public final class BookDao {
         }
     }
 
-    public void delete(int bookId) throws DaoException {
+    /** Looks up one book by its catalog ID, the number used at the desk. */
+    public Book findById(int bookId) throws DaoException {
+        String sql = "SELECT * FROM books WHERE id = ?";
         try (Connection c = Db.getConnection();
-             PreparedStatement ps = c.prepareStatement("DELETE FROM books WHERE id = ?")) {
+             PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, bookId);
-            ps.executeUpdate();
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? map(rs) : null;
+            }
+        } catch (SQLException ex) {
+            throw new DaoException("Could not look up that book.\n" + ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Deletes a book that is on the shelf.
+     *
+     * <p>The {@code borrowed = 0} guard means a copy that is out on loan can
+     * never be deleted by accident, even if two people act at once. A false
+     * result tells the caller the book was issued in the meantime.</p>
+     */
+    public boolean delete(int bookId) throws DaoException {
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM books WHERE id = ? AND borrowed = 0")) {
+            ps.setInt(1, bookId);
+            return ps.executeUpdate() == 1;
         } catch (SQLException ex) {
             throw new DaoException("Could not remove that book.\n" + ex.getMessage(), ex);
         }
