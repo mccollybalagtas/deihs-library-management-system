@@ -3,6 +3,7 @@ package com.deihs.library.ui;
 import com.deihs.library.dao.BookDao;
 import com.deihs.library.dao.DaoException;
 import com.deihs.library.model.Book;
+import com.deihs.library.model.Role;
 import com.deihs.library.model.User;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -48,6 +49,8 @@ public class MainView extends BorderPane {
     private CollectionPanel collection;
     private CirculationView circulation;
     private CatalogView catalog;
+    private MyLoansView myLoans;
+    private UsersView users;
 
     public MainView(Stage stage, User user, Runnable onLogout) {
         this.stage = stage;
@@ -64,7 +67,7 @@ public class MainView extends BorderPane {
         setCenter(center);
 
         navigate("dashboard");
-        setStatus("Signed in as " + user.getDisplayName());
+        setStatus("Signed in as " + user.getDisplayName() + " \u2022 " + user.getRole().label());
     }
 
     public Window window() {
@@ -73,6 +76,10 @@ public class MainView extends BorderPane {
 
     public User user() {
         return user;
+    }
+
+    public Role role() {
+        return user.getRole();
     }
 
     public void setStatus(String message) {
@@ -86,13 +93,16 @@ public class MainView extends BorderPane {
         }
     }
 
-    public void navigate(String key) {
+    public void navigate(String requestedKey) {
+        final String key = navButtons.containsKey(requestedKey) ? requestedKey : "dashboard";
         currentKey = key;
 
         pageTitle.setText(switch (key) {
             case "collection" -> "Book Collection";
             case "circulation" -> "Circulation";
+            case "myloans" -> "My Loans";
             case "catalog" -> "Catalog";
+            case "users" -> "Accounts";
             default -> "Library Dashboard";
         });
 
@@ -120,6 +130,14 @@ public class MainView extends BorderPane {
                 }
                 content.getChildren().setAll(circulation);
             }
+            case "myloans" -> {
+                if (myLoans == null) {
+                    myLoans = new MyLoansView(this);
+                } else {
+                    myLoans.refresh();
+                }
+                content.getChildren().setAll(myLoans);
+            }
             case "catalog" -> {
                 if (catalog == null) {
                     catalog = new CatalogView(this);
@@ -127,6 +145,14 @@ public class MainView extends BorderPane {
                     catalog.refresh();
                 }
                 content.getChildren().setAll(catalog);
+            }
+            case "users" -> {
+                if (users == null) {
+                    users = new UsersView(this);
+                } else {
+                    users.refresh();
+                }
+                content.getChildren().setAll(users);
             }
             default -> {
                 if (dashboard == null) {
@@ -145,10 +171,17 @@ public class MainView extends BorderPane {
         collection = null;
         circulation = null;
         catalog = null;
+        myLoans = null;
+        users = null;
         navigate(currentKey);
     }
 
     public void addBook() {
+        if (!user.getRole().canManageBooks()) {
+            Dialogs.error(stage, "Not allowed",
+                    "Only an administrator can add or change books in the catalog.");
+            return;
+        }
         Book book = BookFormView.show(stage, null);
         if (book == null) {
             return;
@@ -207,11 +240,21 @@ public class MainView extends BorderPane {
         menu.setTextFill(Color.web("#7E9CC0"));
         menu.setPadding(new Insets(0, 0, 4, 8));
 
-        sidebar.getChildren().addAll(brand, menu,
-                navButton("dashboard", "\u25A6", "Dashboard"),
-                navButton("collection", "\u25A4", "Book Collection"),
-                navButton("circulation", "\u21C4", "Circulation"),
-                navButton("catalog", "\u2630", "Catalog"));
+        sidebar.getChildren().addAll(brand, menu, navButton("dashboard", "\u25A6", "Dashboard"));
+
+        if (user.getRole().canManageBooks()) {
+            sidebar.getChildren().add(navButton("collection", "\u25A4", "Book Collection"));
+        }
+        if (user.getRole().canRunDesk()) {
+            sidebar.getChildren().add(navButton("circulation", "\u21C4", "Circulation"));
+        }
+        if (user.getRole().canBorrowForSelf()) {
+            sidebar.getChildren().add(navButton("myloans", "\u21C4", "My Loans"));
+        }
+        sidebar.getChildren().add(navButton("catalog", "\u2630", "Catalog"));
+        if (user.getRole().canManageUsers()) {
+            sidebar.getChildren().add(navButton("users", "\u263A", "Accounts"));
+        }
 
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
@@ -258,6 +301,9 @@ public class MainView extends BorderPane {
         name.setFont(Font.font("SansSerif", FontWeight.BOLD, 12));
         name.setTextFill(Color.web("#1F2933"));
 
+        Label rolePill = new Label(user.getRole().label());
+        rolePill.getStyleClass().addAll("role-pill", "role-" + user.getRole().name().toLowerCase(Locale.ROOT));
+
         Label avatar = new Label(user.initial());
         avatar.getStyleClass().add("avatar");
 
@@ -268,7 +314,7 @@ public class MainView extends BorderPane {
         signOut.setOnAction(e -> confirmLogout());
         signOut.setTooltip(new javafx.scene.control.Tooltip("Sign out"));
 
-        HBox bar = new HBox(10, pageTitle, spacer, date, name, avatar, signOut);
+        HBox bar = new HBox(10, pageTitle, spacer, date, name, rolePill, avatar, signOut);
         bar.getStyleClass().add("topbar");
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
@@ -281,7 +327,7 @@ public class MainView extends BorderPane {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Label version = new Label("Balagtas DEIHS Library  \u2022  v1.0");
+        Label version = new Label("Balagtas DEIHS Library  \u2022  v1.1");
         version.getStyleClass().add("muted");
         version.setFont(Font.font("SansSerif", 9.5));
 

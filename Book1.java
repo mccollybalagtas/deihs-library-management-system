@@ -134,7 +134,7 @@ public class Book1 extends Application {
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
-        stage.setTitle("DEIHS Library Hub");
+        stage.setTitle("DEIHS Library System");
 
         loadUsers();
         loadCatalog();
@@ -174,7 +174,7 @@ public class Book1 extends Application {
 
     private void showLogin() {
         currentUser = null;
-        primaryStage.setTitle("DEIHS Library Hub — Sign In");
+        primaryStage.setTitle("DEIHS Library System — Sign In");
         primaryStage.setScene(createLoginScene());
         primaryStage.setMinWidth(860);
         primaryStage.setMinHeight(600);
@@ -184,7 +184,7 @@ public class Book1 extends Application {
     }
 
     private void enterApplication() {
-        primaryStage.setTitle("DEIHS Library Hub");
+        primaryStage.setTitle("DEIHS Library System");
         primaryStage.setMinWidth(1050);
         primaryStage.setMinHeight(680);
         primaryStage.setScene(mainScene);

@@ -3,6 +3,7 @@ package com.deihs.library.ui;
 import com.deihs.library.dao.BookDao;
 import com.deihs.library.dao.DaoException;
 import com.deihs.library.model.Book;
+import com.deihs.library.model.Role;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -11,6 +12,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -19,7 +21,6 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
-import javafx.scene.layout.FlowPane;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -58,6 +59,10 @@ public class DashboardView extends ScrollPane {
         refresh();
     }
 
+    private Role role() {
+        return main.user().getRole();
+    }
+
     // ------------------------------------------------------------------
     // Sections
     // ------------------------------------------------------------------
@@ -67,7 +72,11 @@ public class DashboardView extends ScrollPane {
         welcome.setFont(Font.font("SansSerif", FontWeight.BOLD, 23));
         welcome.setTextFill(Color.web("#0D264C"));
 
-        Label subtitle = new Label("Here is what is happening in the Balagtas DEIHS library today.");
+        Label subtitle = new Label(switch (role()) {
+            case ADMIN -> "Here is what is happening in the Balagtas DEIHS library today.";
+            case LIBRARIAN -> "Monitor borrowed and returned books and keep the circulation desk moving.";
+            case STUDENT -> "Browse the shelves and keep track of the books you have borrowed.";
+        });
         subtitle.setFont(Font.font("SansSerif", 12));
         subtitle.setTextFill(Color.web("#5B6B80"));
 
@@ -105,7 +114,9 @@ public class DashboardView extends ScrollPane {
     }
 
     private Node buildFilters() {
-        search.setPromptText("Search by title, author, or category\u2026");
+        search.setPromptText(role() == Role.STUDENT
+                ? "Search the shelves by title, author, or category\u2026"
+                : "Search by title, author, or category\u2026");
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.textProperty().addListener((o, a, b) -> refreshGrid());
@@ -122,18 +133,21 @@ public class DashboardView extends ScrollPane {
             }
         });
 
-        Button add = new Button("+  Add Book");
-        add.getStyleClass().add("primary-btn");
-        add.setPrefHeight(40);
-        add.setOnAction(e -> main.addBook());
-
-        HBox row = new HBox(10, search, category, add);
+        HBox row = new HBox(10, search, category);
         row.setAlignment(Pos.CENTER_LEFT);
+
+        if (role().canManageBooks()) {
+            Button add = new Button("+  Add Book");
+            add.getStyleClass().add("primary-btn");
+            add.setPrefHeight(40);
+            add.setOnAction(e -> main.addBook());
+            row.getChildren().add(add);
+        }
         return row;
     }
 
     private Node buildSectionHeader() {
-        Label title = new Label("Book Collection");
+        Label title = new Label(role().canManageBooks() ? "Book Collection" : "Browse the Collection");
         title.getStyleClass().add("h2");
 
         Region spacer = new Region();
@@ -145,7 +159,7 @@ public class DashboardView extends ScrollPane {
         Button viewAll = new Button("View all  \u2192");
         viewAll.getStyleClass().add("link");
         viewAll.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
-        viewAll.setOnAction(e -> main.navigate("collection"));
+        viewAll.setOnAction(e -> main.navigate(role().canManageBooks() ? "collection" : "catalog"));
 
         HBox header = new HBox(10, title, spacer, countLabel, viewAll);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -176,13 +190,25 @@ public class DashboardView extends ScrollPane {
 
     public void refresh() {
         try {
-            BookDao.Stats stats = dao.stats();
-            statsRow.getChildren().setAll(
-                    statCard("Total Books", String.valueOf(stats.total()), "\u25A4", "stat-blue"),
-                    statCard("Available", String.valueOf(stats.available()), "\u2713", "stat-green"),
-                    statCard("Borrowed", String.valueOf(stats.borrowed()), "\u21C4", "stat-pink"),
-                    statCard("Printed", String.valueOf(stats.printed()), "\u25A6", "stat-purple"),
-                    statCard("E-Books", String.valueOf(stats.ebook()), "\u25C9", "stat-amber"));
+            if (role().seesLibraryStats()) {
+                BookDao.Stats stats = dao.stats();
+                statsRow.getChildren().setAll(
+                        statCard("Total Books", String.valueOf(stats.total()), "\u25A4", "stat-blue"),
+                        statCard("Available", String.valueOf(stats.available()), "\u2713", "stat-green"),
+                        statCard("On Loan", String.valueOf(stats.borrowed()), "\u21C4", "stat-pink"),
+                        statCard("Overdue", String.valueOf(stats.overdue()), "!", "stat-red"),
+                        statCard("E-Books", String.valueOf(stats.ebook()), "\u25C9", "stat-amber"));
+            } else {
+                List<Book> mine = dao.findByBorrower(main.user().getId());
+                long dueSoon = mine.stream().filter(Book::isDueSoon).count();
+                long overdue = mine.stream().filter(Book::isOverdue).count();
+                BookDao.Stats stats = dao.stats();
+                statsRow.getChildren().setAll(
+                        statCard("My Loans", mine.size() + " / " + Book.MAX_LOANS, "\u21C4", "stat-blue"),
+                        statCard("Due Soon", String.valueOf(dueSoon), "\u23F0", "stat-amber"),
+                        statCard("Overdue", String.valueOf(overdue), "!", "stat-red"),
+                        statCard("Available Now", String.valueOf(stats.available()), "\u2713", "stat-green"));
+            }
 
             updatingFilters = true;
             String selected = category.getValue();
@@ -203,7 +229,8 @@ public class DashboardView extends ScrollPane {
             int shown = Math.min(books.size(), RECENT_LIMIT);
             grid.getChildren().clear();
             for (int i = 0; i < shown; i++) {
-                grid.getChildren().add(new BookCard(books.get(i), main.window(), main::refreshData));
+                grid.getChildren().add(new BookCard(books.get(i), main.window(), main::refreshData,
+                        role().canManageBooks()));
             }
             countLabel.setText(books.isEmpty()
                     ? "No titles"

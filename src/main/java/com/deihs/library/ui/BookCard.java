@@ -22,13 +22,22 @@ public class BookCard extends VBox {
     private final Book book;
     private final Window owner;
     private final Runnable onChanged;
+    private final boolean editable;
 
-    public BookCard(Book book, Window owner, Runnable onChanged) {
+    /**
+     * @param editable true only for administrators; everyone else gets a
+     *                 read-only tile that cannot open the edit dialog.
+     */
+    public BookCard(Book book, Window owner, Runnable onChanged, boolean editable) {
         this.book = book;
         this.owner = owner;
         this.onChanged = onChanged;
+        this.editable = editable;
 
         getStyleClass().add("book-card");
+        if (!editable) {
+            getStyleClass().add("book-card-readonly");
+        }
         setSpacing(8);
         setPadding(new Insets(12));
         setPrefWidth(CARD_WIDTH);
@@ -41,8 +50,23 @@ public class BookCard extends VBox {
                 authorLabel(),
                 badgeRow());
 
-        setOnMouseClicked(e -> edit());
-        Tooltip.install(this, new Tooltip("Click to edit this book"));
+        if (book.isBorrowed() && book.getDueAt() != null) {
+            Label due = new Label(book.isOverdue()
+                    ? book.loanStatusText()
+                    : "Due " + book.dueText());
+            due.getStyleClass().add(book.isOverdue() ? "due-overdue" : "due-soon");
+            due.setMaxWidth(COVER_WIDTH);
+            getChildren().add(due);
+        }
+
+        if (editable) {
+            setOnMouseClicked(e -> edit());
+            Tooltip.install(this, new Tooltip("Click to edit this book"));
+        } else {
+            Tooltip.install(this, new Tooltip(book.isBorrowed()
+                    ? book.loanStatusText()
+                    : "Available on the shelf"));
+        }
     }
 
     private Label titleLabel() {
@@ -64,8 +88,8 @@ public class BookCard extends VBox {
     }
 
     private HBox badgeRow() {
-        Label status = new Label(book.statusText());
-        status.getStyleClass().add(book.isBorrowed() ? "pill-out" : "pill-available");
+        Label status = new Label(book.isBorrowed() ? book.loanStatusText() : book.statusText());
+        status.getStyleClass().add(book.isBorrowed() ? book.loanPillStyle() : "pill-available");
 
         Label type = new Label(book.getBookType());
         type.getStyleClass().add("type-badge");
@@ -76,6 +100,9 @@ public class BookCard extends VBox {
     }
 
     private void edit() {
+        if (!editable) {
+            return;
+        }
         Book edited = BookFormView.show(owner, book);
         if (edited == null) {
             return;

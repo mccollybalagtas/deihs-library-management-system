@@ -177,6 +177,7 @@
 .stat-pink   { -fx-background-color: linear-gradient(to bottom right, #FDECEC, #FBDCDC); }
 .stat-purple { -fx-background-color: linear-gradient(to bottom right, #F1ECFD, #E6DDFB); }
 .stat-amber  { -fx-background-color: linear-gradient(to bottom right, #FFF4E0, #FDE9C6); }
+.stat-red    { -fx-background-color: linear-gradient(to bottom right, #FDECEC, #FBDCDC); }
 .stat-title { -fx-font-size: 9.5px; -fx-font-weight: bold; -fx-text-fill: #475467; }
 .stat-value { -fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: #0D264C; }
 .stat-icon  { -fx-font-size: 20px; -fx-opacity: 0.75; }
@@ -220,6 +221,67 @@
     -fx-padding: 3 10 3 10;
     -fx-font-size: 10px;
     -fx-font-weight: bold;
+}
+.pill-soon {
+    -fx-background-color: #FFF1D6;
+    -fx-text-fill: #A05A00;
+    -fx-background-radius: 20;
+    -fx-padding: 3 10 3 10;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+.pill-overdue {
+    -fx-background-color: #FDE2E1;
+    -fx-text-fill: #C0392B;
+    -fx-background-radius: 20;
+    -fx-padding: 3 10 3 10;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+.due-soon { -fx-text-fill: #A05A00; -fx-font-weight: bold; -fx-font-size: 10.5px; }
+.due-overdue { -fx-text-fill: #C0392B; -fx-font-weight: bold; -fx-font-size: 10.5px; }
+
+/* ---------- Role badges ---------- */
+.role-pill {
+    -fx-background-radius: 20;
+    -fx-padding: 3 10 3 10;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
+}
+.role-admin {
+    -fx-background-color: #E6DDFB;
+    -fx-text-fill: #5B3BB5;
+}
+.role-librarian {
+    -fx-background-color: #D9F7E6;
+    -fx-text-fill: #0F7D50;
+}
+.role-student {
+    -fx-background-color: #DDEBFC;
+    -fx-text-fill: #17457F;
+}
+
+/* ---------- Hints and validation ---------- */
+.hint-label { -fx-text-fill: #667085; -fx-font-size: 10.5px; }
+.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weight: bold; }
+.field.field-error,
+.text-field.field-error { -fx-border-color: #D64545; }
+
+/* ---------- Circulation desk bar ---------- */
+.desk-bar {
+    -fx-background-color: #EEF5FE;
+    -fx-border-color: #D8E5F6;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+}
+
+/* ---------- Read-only book cards ---------- */
+.book-card-readonly {
+    -fx-cursor: default;
+}
+.book-card-readonly:hover {
+    -fx-border-color: #E3EAF4;
+    -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.08), 14, 0.1, 0, 3);
 }
 
 /* ---------- Scroll panes ---------- */
@@ -275,6 +337,32 @@
 .row-btn:hover { -fx-background-color: #17457F; }
 .row-btn-danger { -fx-background-color: #C0392B; }
 .row-btn-danger:hover { -fx-background-color: #A93226; }
+
+/* MenuButton reuses the row button look, including its label and arrow. */
+.menu-button.row-btn { -fx-padding: 0; }
+.menu-button.row-btn > .label {
+    -fx-text-fill: white;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-padding: 6 8 6 12;
+}
+.menu-button.row-btn > .arrow-button { -fx-padding: 0 8 0 2; }
+.menu-button.row-btn > .arrow-button > .arrow { -fx-background-color: white; }
+.menu-button.row-btn:hover { -fx-background-color: #17457F; }
+.menu-button.row-btn .context-menu {
+    -fx-background-color: white;
+    -fx-background-radius: 8;
+    -fx-border-color: #D7DEEA;
+    -fx-border-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.16), 16, 0.12, 0, 6);
+}
+.menu-button.row-btn .menu-item .label {
+    -fx-text-fill: #1F2933;
+    -fx-font-size: 11.5px;
+    -fx-font-weight: normal;
+}
+.menu-button.row-btn .menu-item:focused { -fx-background-color: #E8F1FD; }
+.menu-button.row-btn .menu-item:focused .label { -fx-text-fill: #0D264C; }
 
 /* ---------- Dialogs ---------- */
 .dialog-pane {

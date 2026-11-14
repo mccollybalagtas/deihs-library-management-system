@@ -68,6 +68,10 @@ public final class Db {
         }
 
         ready = true;
+
+        // Add the role/lockout/loan columns to databases created by an older
+        // release. The migration is idempotent and keeps every existing row.
+        Schema.migrate();
     }
 
     public static Connection getConnection() throws SQLException {

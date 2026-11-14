@@ -3,6 +3,10 @@ package com.deihs.library.ui;
 import com.deihs.library.dao.DaoException;
 import com.deihs.library.dao.UserDao;
 import com.deihs.library.model.User;
+import com.deihs.library.util.Validation;
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.geometry.Insets;
@@ -12,6 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
@@ -29,8 +34,11 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.util.Locale;
 import java.util.function.Consumer;
 
 /** The sign-in screen. Calls {@code onSuccess} once the credentials check out. */
@@ -45,6 +53,10 @@ public class LoginView extends StackPane {
     private final TextField passwordShown = new TextField();
     private final SimpleStringProperty passwordText = new SimpleStringProperty("");
     private final Label errorLabel = new Label(" ");
+    private final Label usernameHint = new Label(" ");
+    private final Button signInButton = new Button("Sign In");
+
+    private Timeline lockTimer;
 
     public LoginView(Stage owner, Consumer<User> onSuccess) {
         this.owner = owner;
@@ -155,27 +167,32 @@ public class LoginView extends StackPane {
     private VBox buildFormPanel() {
         VBox form = new VBox(0);
         form.getStyleClass().add("login-form");
-        form.setPadding(new Insets(48, 56, 38, 56));
+        form.setPadding(new Insets(44, 56, 34, 56));
         HBox.setHgrow(form, Priority.ALWAYS);
 
         Label title = new Label("Welcome back");
         title.setFont(Font.font("SansSerif", FontWeight.BOLD, 28));
         title.setTextFill(Color.web("#0D264C"));
 
-        Label caption = new Label("Sign in to manage the library catalog.");
+        Label caption = new Label("Sign in to borrow, return and manage library books.");
         caption.setFont(Font.font("SansSerif", 12));
         caption.setTextFill(Color.web("#667085"));
 
         VBox titleBox = new VBox(6, title, caption);
-        titleBox.setPadding(new Insets(0, 0, 24, 0));
+        titleBox.setPadding(new Insets(0, 0, 20, 0));
 
         Label userLabel = new Label("USERNAME");
         userLabel.getStyleClass().add("field-label");
 
-        usernameField.setPromptText("Enter your username");
+        usernameField.setPromptText("Letters only, e.g. juan");
         usernameField.getStyleClass().add("field");
         usernameField.setPrefHeight(44);
         usernameField.setMaxWidth(Double.MAX_VALUE);
+        usernameField.textProperty().addListener((o, old, value) -> checkUsername(value));
+
+        usernameHint.getStyleClass().add("hint-label");
+        usernameHint.setWrapText(true);
+        usernameHint.setMinHeight(16);
 
         Label passLabel = new Label("PASSWORD");
         passLabel.getStyleClass().add("field-label");
@@ -214,19 +231,18 @@ public class LoginView extends StackPane {
         errorLabel.setWrapText(true);
         errorLabel.setMinHeight(30);
 
-        Button signIn = new Button("Sign In");
-        signIn.getStyleClass().add("primary-btn");
-        signIn.setMaxWidth(Double.MAX_VALUE);
-        signIn.setPrefHeight(46);
-        signIn.setFont(Font.font("SansSerif", FontWeight.BOLD, 14));
-        signIn.setDefaultButton(true);
-        signIn.setOnAction(e -> attemptLogin());
+        signInButton.getStyleClass().add("primary-btn");
+        signInButton.setMaxWidth(Double.MAX_VALUE);
+        signInButton.setPrefHeight(46);
+        signInButton.setFont(Font.font("SansSerif", FontWeight.BOLD, 14));
+        signInButton.setDefaultButton(true);
+        signInButton.setOnAction(e -> attemptLogin());
 
         usernameField.setOnAction(e -> passwordHidden.requestFocus());
         passwordHidden.setOnAction(e -> attemptLogin());
         passwordShown.setOnAction(e -> attemptLogin());
 
-        Label newHere = new Label("New to the system?");
+        Label newHere = new Label("New student?");
         newHere.setFont(Font.font("SansSerif", 12));
         newHere.setTextFill(Color.web("#667085"));
 
@@ -237,12 +253,12 @@ public class LoginView extends StackPane {
         HBox registerRow = new HBox(6, newHere, register);
         registerRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox fields = new VBox(7,
-                userLabel, usernameField,
+        VBox fields = new VBox(6,
+                userLabel, usernameField, usernameHint,
                 passLabel, passwordStack,
-                showPassword, errorLabel, signIn, registerRow);
-        VBox.setMargin(passLabel, new Insets(12, 0, 0, 0));
-        VBox.setMargin(showPassword, new Insets(2, 0, 6, 0));
+                showPassword, errorLabel, signInButton, registerRow);
+        VBox.setMargin(passLabel, new Insets(8, 0, 0, 0));
+        VBox.setMargin(showPassword, new Insets(2, 0, 4, 0));
         VBox.setMargin(errorLabel, new Insets(0, 0, 2, 0));
 
         Region spacer = new Region();
@@ -253,7 +269,7 @@ public class LoginView extends StackPane {
         footer.setTextFill(Color.web("#98A2B3"));
 
         VBox footBox = new VBox(4, footer);
-        footBox.setPadding(new Insets(14, 0, 0, 0));
+        footBox.setPadding(new Insets(12, 0, 0, 0));
 
         form.getChildren().addAll(titleBox, fields, spacer, footBox);
         return form;
@@ -262,6 +278,20 @@ public class LoginView extends StackPane {
     // ------------------------------------------------------------------
     // Authentication
     // ------------------------------------------------------------------
+
+    /** Live feedback while typing, so a number is flagged before Sign In. */
+    private void checkUsername(String value) {
+        boolean valid = value == null || value.isBlank() || Validation.isValidUsername(value);
+        usernameField.getStyleClass().remove("field-error");
+        if (valid) {
+            usernameHint.setText(" ");
+        } else {
+            if (!usernameField.getStyleClass().contains("field-error")) {
+                usernameField.getStyleClass().add("field-error");
+            }
+            usernameHint.setText(Validation.usernameProblem(value));
+        }
+    }
 
     private void attemptLogin() {
         errorLabel.setText(" ");
@@ -280,27 +310,77 @@ public class LoginView extends StackPane {
         }
 
         try {
-            User user = userDao.authenticate(name, password);
-            if (user == null) {
-                errorLabel.setText("Invalid username or password. Please try again.");
-                passwordText.set("");
-                passwordHidden.requestFocus();
-                return;
+            UserDao.LoginResult result = userDao.login(name, password);
+            switch (result.status()) {
+                case SUCCESS -> {
+                    stopLockTimer();
+                    onSuccess.accept(result.user());
+                }
+                case INVALID_USERNAME -> {
+                    errorLabel.setText(Validation.usernameProblem(name));
+                    usernameField.requestFocus();
+                }
+                case INACTIVE -> {
+                    errorLabel.setText("This account has been disabled. Please ask the administrator.");
+                }
+                case LOCKED -> {
+                    passwordText.set("");
+                    startLockCountdown(result.lockedUntil());
+                }
+                case INVALID_CREDENTIALS -> {
+                    passwordText.set("");
+                    passwordHidden.requestFocus();
+                    int left = result.attemptsLeft();
+                    errorLabel.setText("Invalid username or password. "
+                            + left + (left == 1 ? " attempt" : " attempts")
+                            + " left before the account is locked for "
+                            + UserDao.LOCK_MINUTES + " minutes.");
+                }
             }
-            onSuccess.accept(user);
         } catch (DaoException ex) {
             errorLabel.setText(ex.getMessage());
         }
     }
 
+    private void startLockCountdown(LocalDateTime until) {
+        stopLockTimer();
+        signInButton.setDisable(true);
+        signInButton.setText("Locked");
+
+        lockTimer = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+            java.time.Duration remaining = java.time.Duration.between(LocalDateTime.now(), until);
+            if (remaining.isNegative() || remaining.isZero()) {
+                stopLockTimer();
+                signInButton.setDisable(false);
+                signInButton.setText("Sign In");
+                errorLabel.setText("You can try signing in again now.");
+            } else {
+                long seconds = remaining.getSeconds();
+                errorLabel.setText("Too many failed attempts. Account locked \u2014 try again in "
+                        + String.format(Locale.ROOT, "%d:%02d", seconds / 60, seconds % 60) + ".");
+            }
+        }));
+        lockTimer.setCycleCount(Animation.INDEFINITE);
+        lockTimer.play();
+        errorLabel.setText("Too many failed attempts. Account locked for "
+                + UserDao.LOCK_MINUTES + " minutes.");
+    }
+
+    private void stopLockTimer() {
+        if (lockTimer != null) {
+            lockTimer.stop();
+            lockTimer = null;
+        }
+    }
+
     // ------------------------------------------------------------------
-    // Account creation
+    // Account creation (students only)
     // ------------------------------------------------------------------
 
     private void showRegisterDialog() {
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Create Account");
-        dialog.setHeaderText("Create a new library account");
+        dialog.setTitle("Create Student Account");
+        dialog.setHeaderText("Create a student library account");
         dialog.initOwner(owner);
         Dialogs.style(dialog.getDialogPane());
 
@@ -308,17 +388,17 @@ public class LoginView extends StackPane {
         dialog.getDialogPane().getButtonTypes().addAll(createType, ButtonType.CANCEL);
 
         TextField username = new TextField();
-        username.setPromptText("Username");
+        username.setPromptText("Letters only");
         username.getStyleClass().add("field");
         username.setPrefHeight(38);
 
         TextField displayName = new TextField();
-        displayName.setPromptText("Display name (optional)");
+        displayName.setPromptText("Full name (optional)");
         displayName.getStyleClass().add("field");
         displayName.setPrefHeight(38);
 
         PasswordField password = new PasswordField();
-        password.setPromptText("Password");
+        password.setPromptText("At least 8 characters");
         password.getStyleClass().add("field");
         password.setPrefHeight(38);
 
@@ -327,7 +407,8 @@ public class LoginView extends StackPane {
         confirm.getStyleClass().add("field");
         confirm.setPrefHeight(38);
 
-        Label hint = new Label("Usernames are not case-sensitive. Minimum 3 characters for the username, 4 for the password.");
+        Label hint = new Label("Usernames use letters only (3\u201320). Passwords need at least "
+                + Validation.PASSWORD_MIN + " characters with one letter and one number.");
         hint.setFont(Font.font("SansSerif", 10));
         hint.setTextFill(Color.web("#667085"));
         hint.setWrapText(true);
@@ -337,12 +418,17 @@ public class LoginView extends StackPane {
         error.setWrapText(true);
         error.setMinHeight(26);
 
+        username.textProperty().addListener((o, old, value) -> {
+            String problem = value == null || value.isBlank() ? null : Validation.usernameProblem(value);
+            error.setText(problem == null ? " " : problem);
+        });
+
         javafx.scene.layout.GridPane grid = new javafx.scene.layout.GridPane();
         grid.setHgap(12);
         grid.setVgap(9);
         grid.setPadding(new Insets(6, 4, 4, 4));
         grid.addRow(0, new Label("Username"), username);
-        grid.addRow(1, new Label("Display name"), displayName);
+        grid.addRow(1, new Label("Full name"), displayName);
         grid.addRow(2, new Label("Password"), password);
         grid.addRow(3, new Label("Confirm"), confirm);
         grid.add(hint, 1, 4);
@@ -360,31 +446,32 @@ public class LoginView extends StackPane {
                 String p1 = password.getText() == null ? "" : password.getText();
                 String p2 = confirm.getText() == null ? "" : confirm.getText();
 
-                if (name.length() < 3) {
-                    error.setText("Username must be at least 3 characters.");
+                String problem = Validation.usernameProblem(name);
+                if (problem == null) {
+                    problem = Validation.passwordProblem(p1);
+                }
+                if (problem == null && !p1.equals(p2)) {
+                    problem = "The two passwords do not match.";
+                }
+                if (problem != null) {
+                    error.setText(problem);
                     event.consume();
-                } else if (p1.length() < 4) {
-                    error.setText("Password must be at least 4 characters.");
+                    return;
+                }
+                try {
+                    userDao.createStudent(name, displayName.getText(), p1);
+                    usernameField.setText(name.toLowerCase(Locale.ROOT));
+                    passwordText.set("");
+                } catch (DaoException ex) {
+                    error.setText(ex.getMessage());
                     event.consume();
-                } else if (!p1.equals(p2)) {
-                    error.setText("Passwords do not match.");
-                    event.consume();
-                } else {
-                    try {
-                        userDao.create(name, displayName.getText(), p1);
-                        usernameField.setText(name.toLowerCase(java.util.Locale.ROOT));
-                        passwordText.set("");
-                    } catch (DaoException ex) {
-                        error.setText(ex.getMessage());
-                        event.consume();
-                    }
                 }
             });
         }
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) == createType) {
             Dialogs.info(owner, "Account created",
-                    "Your account is ready. Enter your password to sign in.");
+                    "Your student account is ready. Enter your password to sign in.");
             passwordHidden.requestFocus();
         }
     }

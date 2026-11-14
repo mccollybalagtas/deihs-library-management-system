@@ -25,9 +25,13 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/** Catalog administration: add, edit and remove titles and their covers. */
+/**
+ * The catalog. Administrators can add, edit and remove titles; librarians and
+ * students get the same table in read-only form.
+ */
 public class CatalogView extends VBox {
 
     private final MainView main;
@@ -61,7 +65,9 @@ public class CatalogView extends VBox {
     // ------------------------------------------------------------------
 
     private Node buildToolbar() {
-        Label subtitle = new Label("Maintain the library catalog. Every change is saved to MySQL immediately.");
+        Label subtitle = new Label(main.role().canManageBooks()
+                ? "Maintain the library catalog. Every change is saved to MySQL immediately."
+                : "Browse every title on the shelves. Only an administrator can change catalog records.");
         subtitle.getStyleClass().add("muted");
         subtitle.setFont(Font.font("SansSerif", 12));
 
@@ -73,13 +79,16 @@ public class CatalogView extends VBox {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button add = new Button("+  Add Book");
-        add.getStyleClass().add("primary-btn");
-        add.setPrefHeight(40);
-        add.setOnAction(e -> main.addBook());
-
-        HBox row = new HBox(10, left, spacer, add);
+        HBox row = new HBox(10, left, spacer);
         row.setAlignment(Pos.CENTER_LEFT);
+
+        if (main.role().canManageBooks()) {
+            Button add = new Button("+  Add Book");
+            add.getStyleClass().add("primary-btn");
+            add.setPrefHeight(40);
+            add.setOnAction(e -> main.addBook());
+            row.getChildren().add(add);
+        }
         return row;
     }
 
@@ -117,7 +126,9 @@ public class CatalogView extends VBox {
     private Node buildTableCard() {
         table.getStyleClass().add("table-view");
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPlaceholder(placeholder("The catalog is empty. Use \u201CAdd Book\u201D to start it."));
+        table.setPlaceholder(placeholder(main.role().canManageBooks()
+                ? "The catalog is empty. Use \u201CAdd Book\u201D to start it."
+                : "The catalog is empty."));
         table.setFixedCellSize(64);
         table.setPrefHeight(460);
 
@@ -164,9 +175,15 @@ public class CatalogView extends VBox {
                 data.getValue().getExtraInfo() == null ? "\u2014" : data.getValue().getExtraInfo()));
         detailsCol.setMinWidth(95);
 
+        TableColumn<Book, String> dueCol = new TableColumn<>("Due");
+        dueCol.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().isBorrowed() ? data.getValue().dueText() : "\u2014"));
+        dueCol.setMinWidth(95);
+
         TableColumn<Book, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().statusText()));
-        statusCol.setMinWidth(105);
+        statusCol.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().isBorrowed() ? data.getValue().loanStatusText() : data.getValue().statusText()));
+        statusCol.setMinWidth(130);
         statusCol.setCellFactory(col -> new TableCell<>() {
             @Override
             protected void updateItem(String value, boolean empty) {
@@ -177,42 +194,53 @@ public class CatalogView extends VBox {
                     return;
                 }
                 Book book = getTableRow().getItem();
-                Label pill = new Label(book.statusText());
-                pill.getStyleClass().add(book.isBorrowed() ? "pill-out" : "pill-available");
+                Label pill = new Label(book.isBorrowed() ? book.loanStatusText() : book.statusText());
+                pill.getStyleClass().add(book.isBorrowed() ? book.loanPillStyle() : "pill-available");
                 setGraphic(pill);
                 setText(null);
             }
         });
 
-        TableColumn<Book, Void> actionCol = new TableColumn<>("Actions");
-        actionCol.setMinWidth(150);
-        actionCol.setMaxWidth(170);
-        actionCol.setSortable(false);
-        actionCol.setCellFactory(col -> new TableCell<>() {
-            private final Button edit = new Button("Edit");
-            private final Button delete = new Button("Delete");
-            private final HBox box = new HBox(6, edit, delete);
+        List<TableColumn<Book, ?>> columns = new ArrayList<>();
+        columns.add(titleCol);
+        columns.add(categoryCol);
+        columns.add(typeCol);
+        columns.add(detailsCol);
+        columns.add(dueCol);
+        columns.add(statusCol);
 
-            {
-                box.setAlignment(Pos.CENTER_LEFT);
-                edit.getStyleClass().add("row-btn");
-                delete.getStyleClass().addAll("row-btn", "row-btn-danger");
-                edit.setOnAction(e -> editBook(rowBook()));
-                delete.setOnAction(e -> deleteBook(rowBook()));
-            }
+        if (main.role().canManageBooks()) {
+            TableColumn<Book, Void> actionCol = new TableColumn<>("Actions");
+            actionCol.setMinWidth(150);
+            actionCol.setMaxWidth(170);
+            actionCol.setSortable(false);
+            actionCol.setCellFactory(col -> new TableCell<>() {
+                private final Button edit = new Button("Edit");
+                private final Button delete = new Button("Delete");
+                private final HBox box = new HBox(6, edit, delete);
 
-            private Book rowBook() {
-                return getTableRow() == null ? null : getTableRow().getItem();
-            }
+                {
+                    box.setAlignment(Pos.CENTER_LEFT);
+                    edit.getStyleClass().add("row-btn");
+                    delete.getStyleClass().addAll("row-btn", "row-btn-danger");
+                    edit.setOnAction(e -> editBook(rowBook()));
+                    delete.setOnAction(e -> deleteBook(rowBook()));
+                }
 
-            @Override
-            protected void updateItem(Void value, boolean empty) {
-                super.updateItem(value, empty);
-                setGraphic(empty || rowBook() == null ? null : box);
-            }
-        });
+                private Book rowBook() {
+                    return getTableRow() == null ? null : getTableRow().getItem();
+                }
 
-        table.getColumns().setAll(List.of(titleCol, categoryCol, typeCol, detailsCol, statusCol, actionCol));
+                @Override
+                protected void updateItem(Void value, boolean empty) {
+                    super.updateItem(value, empty);
+                    setGraphic(empty || rowBook() == null ? null : box);
+                }
+            });
+            columns.add(actionCol);
+        }
+
+        table.getColumns().setAll(columns);
 
         VBox card = new VBox(table);
         card.getStyleClass().add("card");
@@ -260,7 +288,7 @@ public class CatalogView extends VBox {
     }
 
     private void editBook(Book book) {
-        if (book == null) {
+        if (book == null || !main.role().canManageBooks()) {
             return;
         }
         Book edited = BookFormView.show(main.window(), book);
@@ -277,7 +305,7 @@ public class CatalogView extends VBox {
     }
 
     private void deleteBook(Book book) {
-        if (book == null) {
+        if (book == null || !main.role().canManageBooks()) {
             return;
         }
         boolean confirmed = Dialogs.confirm(main.window(), "Remove book",

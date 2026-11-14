@@ -58,13 +58,16 @@ public class CollectionPanel extends VBox {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button add = new Button("+  Add Book");
-        add.getStyleClass().add("primary-btn");
-        add.setPrefHeight(40);
-        add.setOnAction(e -> main.addBook());
-
-        HBox row = new HBox(10, left, spacer, add);
+        HBox row = new HBox(10, left, spacer);
         row.setAlignment(Pos.CENTER_LEFT);
+
+        if (main.role().canManageBooks()) {
+            Button add = new Button("+  Add Book");
+            add.getStyleClass().add("primary-btn");
+            add.setPrefHeight(40);
+            add.setOnAction(e -> main.addBook());
+            row.getChildren().add(add);
+        }
         return row;
     }
 
@@ -139,7 +142,8 @@ public class CollectionPanel extends VBox {
             List<Book> books = dao.search(search.getText(), category.getValue());
             grid.getChildren().clear();
             for (Book book : books) {
-                grid.getChildren().add(new BookCard(book, main.window(), main::refreshData));
+                grid.getChildren().add(new BookCard(book, main.window(), main::refreshData,
+                        main.role().canManageBooks()));
             }
             countLabel.setText(books.size() + (books.size() == 1 ? " title" : " titles"));
 

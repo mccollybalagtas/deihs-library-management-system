@@ -3,9 +3,40 @@
 A modern desktop library management system for **Balagtas DEIHS**, built with
 **JavaFX** and **MySQL/MariaDB**. It replaces the old Swing prototype with a
 clean dashboard, a visual book-cover collection, a borrowing desk, and a
-maintainable catalog.
+maintainable catalog — with separate **administrator**, **librarian** and
+**student** accounts.
 
 ![Dashboard](docs/screenshot-dashboard.png)
+
+---
+
+## Accounts and permissions
+
+Every account has exactly one role, and the role decides which pages and actions
+are available. Permission checks live in `model/Role.java`, so a screen cannot
+offer an action the role may not perform.
+
+| Capability | Administrator | Librarian | Student |
+| --- | :---: | :---: | :---: |
+| Dashboard with library-wide statistics | ✅ | ✅ | — |
+| Dashboard with their own loans | — | — | ✅ |
+| Browse the catalog | ✅ | ✅ | ✅ |
+| Add / edit / delete books and covers | ✅ | — | — |
+| Issue and return books for any student | ✅ | ✅ | — |
+| Monitor every loan, due date and overdue title | ✅ | ✅ | — |
+| Borrow and return their **own** books | — | — | ✅ |
+| Manage accounts (roles, passwords, lockout) | ✅ | — | — |
+
+Students are limited to **3 books at a time** and a **7-day loan**. They never
+see the circulation desk or other students' loans; the **My Loans** page is
+their whole workflow.
+
+Librarians see the **Circulation** desk, which lets them pick a student, issue a
+book with a due date, and return it — plus a filter for available, on-loan and
+overdue titles.
+
+Administrators get everything: the full collection editor, the circulation
+desk, and the **Accounts** page for creating users and changing roles.
 
 ---
 
@@ -13,11 +44,13 @@ maintainable catalog.
 
 | Area | What it does |
 | --- | --- |
-| **Sign in / out** | Multiple user accounts, no roles. The first account is the built-in administrator. New accounts can be created from the sign-in screen. Use **Sign out** in the top bar (or at the bottom of the sidebar) to return to the login screen. |
-| **Dashboard** | Live counters (total titles, available, on loan, categories, users), search, category filter, and the newest covers. |
-| **Collection** | Full grid of book covers with title, author, category and availability. Click any cover to edit the title. |
-| **Circulation** | Borrow and return books in one click. Availability, borrower name and loan state are saved to the database immediately. |
-| **Catalog** | Add, edit and delete titles, including cover images. Deleting a title also removes its stored cover file. |
+| **Sign in / out** | Three account types with role-filtered navigation. Use **Sign out** in the top bar (or at the bottom of the sidebar) to return to the login screen. |
+| **Dashboard** | Staff see live counters (total titles, available, on loan, overdue, categories, users); students see their own loan count, due-soon and overdue totals. |
+| **Collection** | Full grid of book covers with title, author, category and availability. Administrators click any cover to edit the title; other roles see a read-only grid. |
+| **Circulation** | Staff pick a student, then issue or return books. Availability, borrower, due date and loan state are saved immediately. |
+| **My Loans** | Students borrow from the available shelves and return their own books, with the 3-book limit and due dates enforced. |
+| **Catalog** | Searchable table of every title. Administrators can add, edit and delete titles, including cover images. |
+| **Accounts** | Administrators create accounts, change roles, reset passwords, unlock locked accounts, disable accounts, and delete accounts. |
 | **Cover photos** | Upload a JPG/PNG for any book. When a title has no cover, the app draws a gradient placeholder jacket so the grid never looks broken. |
 
 The interface uses a navy full-height sidebar, pastel statistic cards and a
@@ -43,7 +76,7 @@ mvn -version
 
 ## 1. Create the database
 
-The schema, the default administrator and eight sample titles are all in
+The schema, the three demo accounts and eight sample titles are all in
 `database/schema.sql`.
 
 ```bash
@@ -59,10 +92,24 @@ mariadb -h 127.0.0.1 -P 3307 -u root < database/schema.sql
 The script creates the `deihs_library` database, the `users` and `books`
 tables, and seeds the catalog. It is safe to re-run: existing rows are kept.
 
+### Upgrading a database from the previous release
+
+`database/migrate_roles.sql` adds the role, lockout and loan columns without
+dropping any table or row. It also promotes the old administrator flag to the
+`ADMIN` role and links existing loans to accounts.
+
+```bash
+mariadb -h 127.0.0.1 -P 3307 -u root deihs_library < database/migrate_roles.sql
+```
+
+The application also runs the same migration automatically at launch
+(`db/Schema.java`), so the script is only needed when you want to prepare the
+database by hand.
+
 Verify the import:
 
 ```bash
-mysql -h 127.0.0.1 -P 3306 -u root -p -e "SELECT COUNT(*) FROM deihs_library.books;"
+mysql -h 127.0.0.1 -P 3306 -u root -p -e "SELECT username, role FROM deihs_library.users;"
 ```
 
 ---
@@ -125,18 +172,40 @@ jar.
 
 ---
 
-## Default login
+## Demo accounts
 
-| Username | Password | Notes |
-| --- | --- | --- |
-| `admin` | `admin123` | Built-in administrator account |
+| Username | Password | Role | What they see |
+| --- | --- | --- | --- |
+| `admin` | `admin123` | Administrator | Everything, including the Accounts page |
+| `librarian` | `librarian123` | Librarian | Dashboard, Circulation, Catalog |
+| `student` | `student123` | Student | Dashboard, My Loans, Catalog |
 
-Create additional accounts with **“Create an account”** on the sign-in screen.
-Passwords are stored as a SHA-256 hash of `username:password`, never in plain
-text.
+> Change these passwords before the system is used by real staff. An
+> administrator can reset any password from **Accounts → Manage**.
 
-> Change the administrator password after the first run if the system will be
-> used by real staff.
+New accounts created from the sign-in screen are always **students**. Only an
+administrator can create librarian or administrator accounts.
+
+---
+
+## Sign-in security
+
+- **Password storage** — new passwords are hashed with
+  **PBKDF2WithHmacSHA256** (120,000 iterations, 16-byte random salt). The old
+  SHA-256 hashes are upgraded automatically the next time that user signs in
+  successfully.
+- **Lockout** — four failed attempts lock the account for **5 minutes**. While
+  locked, even the correct password is refused. An administrator can unlock it
+  immediately from **Accounts**.
+- **Username rules** — usernames are **letters only**, 3–20 characters. Typing a
+  digit or symbol shows a live *“Username may contain letters only”* warning
+  before the form is submitted, and the server rejects it as well.
+- **No account enumeration** — a wrong username and a wrong password return the
+  same message.
+- **Disabled accounts** — an administrator can disable an account, which blocks
+  sign-in until it is re-enabled.
+- **Last administrator guard** — the app refuses to delete, demote or disable the
+  last active administrator, and you cannot delete your own account.
 
 ---
 
@@ -164,20 +233,25 @@ application and include it in backups alongside the database.
 
 ```
 Balagtas DEIHS Library Management System/
-├── database/schema.sql          Schema, admin account, sample books
+├── database/
+│   ├── schema.sql               Schema, three demo accounts, sample books
+│   └── migrate_roles.sql        In-place upgrade from the single-admin build
 ├── covers/                      Uploaded cover images (created at runtime)
 ├── pom.xml                      Maven build (JavaFX 21, MySQL Connector/J)
 ├── run.sh                       Convenience launcher
 └── src/main/
     ├── java/com/deihs/library/
     │   ├── App.java             Entry point, scene switching
-    │   ├── db/Db.java           Connection pool/config
+    │   ├── db/
+    │   │   ├── Db.java          Connection pool/config
+    │   │   └── Schema.java      Automatic column migration at launch
     │   ├── dao/                 UserDao, BookDao, exceptions
-    │   ├── model/               User, Book
+    │   ├── model/               User, Book, Role (permission matrix)
     │   ├── ui/                  LoginView, MainView, DashboardView,
     │   │                        CollectionPanel, CirculationView,
-    │   │                        CatalogView, BookFormView, BookCard
-    │   └── util/                Covers, Passwords
+    │   │                        MyLoansView, UsersView, CatalogView,
+    │   │                        BookFormView, BookCard
+    │   └── util/                Covers, Passwords, Validation
     └── resources/
         ├── css/app.css          Complete visual theme
         ├── db.properties        Connection settings
@@ -188,12 +262,19 @@ Balagtas DEIHS Library Management System/
 
 ## How it works
 
-- **Authentication** — `UserDao.authenticate` hashes `username:password` with
-  SHA-256 and compares it to `users.password_hash`.
+- **Authentication** — `UserDao.login` looks the account up by username, checks
+  the lockout and disabled flags, then verifies the password with
+  `Passwords.verify`. Passwords are stored as PBKDF2WithHmacSHA256 hashes; a
+  legacy SHA-256 hash is re-hashed with PBKDF2 on the next successful sign-in.
+- **Permissions** — `model/Role.java` is the single source of truth. Each page
+  asks the role before showing an action, and `MainView` only builds the nav
+  entries the role is allowed to use.
 - **Persistence** — every action calls a DAO method, so the database is always
   the source of truth. Refreshing a page re-queries MySQL.
-- **Availability** — `books.borrowed`, `borrower` and `borrowed_at` track the
-  loan. The Circulation screen flips them in one click.
+- **Loans** — `books.borrowed`, `borrower_id`, `borrower`, `borrowed_at` and
+  `due_at` track the loan. Staff flip them from the Circulation desk; students
+  flip them from My Loans. A borrower may hold at most `Book.MAX_LOANS` (3)
+  titles at once, and a loan is due `Book.LOAN_DAYS` (7) days after issue.
 - **Editing** — clicking a cover or using **Edit** in the Catalog opens the same
   form; it returns a `Book` and the caller saves it, so add and edit behave
   identically.

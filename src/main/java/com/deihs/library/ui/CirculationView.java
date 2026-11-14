@@ -2,6 +2,7 @@ package com.deihs.library.ui;
 
 import com.deihs.library.dao.BookDao;
 import com.deihs.library.dao.DaoException;
+import com.deihs.library.dao.UserDao;
 import com.deihs.library.model.Book;
 import com.deihs.library.util.Covers;
 import javafx.beans.property.SimpleStringProperty;
@@ -12,11 +13,13 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -25,25 +28,41 @@ import javafx.scene.layout.VBox;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Borrowing desk: every title with its live availability and a one-click
- * borrow/return action.
+ * The circulation desk used by administrators and librarians.
+ *
+ * <p>A staff member first picks the student the book is for, then issues or
+ * returns titles. Students never see this screen; they use {@link MyLoansView}
+ * to manage their own loans.</p>
  */
 public class CirculationView extends VBox {
 
+    private static final String FILTER_ALL = "All books";
+    private static final String FILTER_AVAILABLE = "Available";
+    private static final String FILTER_ON_LOAN = "On loan";
+    private static final String FILTER_OVERDUE = "Overdue";
+
     private final MainView main;
     private final BookDao dao = new BookDao();
+    private final UserDao userDao = new UserDao();
 
     private final ObservableList<Book> rows = FXCollections.observableArrayList();
     private final TableView<Book> table = new TableView<>(rows);
     private final TextField search = new TextField();
     private final ComboBox<String> category = new ComboBox<>();
+    private final ComboBox<String> statusFilter = new ComboBox<>();
+    private final ComboBox<UserDao.Account> studentPicker = new ComboBox<>();
+    private final DatePicker duePicker = new DatePicker(LocalDate.now().plusDays(Book.LOAN_DAYS));
     private final Label countLabel = new Label();
     private final Label hintLabel = new Label();
+    private final Label studentHint = new Label();
 
     private boolean updatingFilters;
+    private boolean loansAtLimit;
 
     public CirculationView(MainView main) {
         this.main = main;
@@ -51,10 +70,11 @@ public class CirculationView extends VBox {
         setPadding(new Insets(22, 26, 26, 26));
 
         Node toolbar = buildToolbar();
+        Node deskRow = buildDeskRow();
         Node filters = buildFilterRow();
         Node tableCard = buildTableCard();
 
-        getChildren().addAll(toolbar, filters, tableCard);
+        getChildren().addAll(toolbar, deskRow, filters, tableCard);
         VBox.setVgrow(tableCard, Priority.ALWAYS);
 
         refresh();
@@ -65,14 +85,14 @@ public class CirculationView extends VBox {
     // ------------------------------------------------------------------
 
     private Node buildToolbar() {
-        Label subtitle = new Label("Borrow and return books. Availability updates the moment you act.");
+        Label subtitle = new Label("Pick a student, then issue or return books. Availability updates immediately.");
         subtitle.getStyleClass().add("muted");
         subtitle.setFont(Font.font("SansSerif", 12));
 
-        hintLabel.getStyleClass().add("muted");
-        hintLabel.setFont(Font.font("SansSerif", 11));
+        countLabel.getStyleClass().add("muted");
+        countLabel.setFont(Font.font("SansSerif", 11));
 
-        VBox left = new VBox(3, subtitle, hintLabel);
+        VBox left = new VBox(3, subtitle, countLabel);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -87,8 +107,52 @@ public class CirculationView extends VBox {
         return row;
     }
 
+    private Node buildDeskRow() {
+        Label studentLabel = new Label("Issue to");
+        studentLabel.getStyleClass().add("field-label");
+
+        studentPicker.getStyleClass().add("combo-box");
+        studentPicker.setPrefWidth(260);
+        studentPicker.setPrefHeight(38);
+        studentPicker.setPromptText("Choose a student\u2026");
+        studentPicker.setConverter(new javafx.util.StringConverter<>() {
+            @Override
+            public String toString(UserDao.Account account) {
+                return account == null ? "" : account.displayName() + "  (" + account.username() + ")";
+            }
+
+            @Override
+            public UserDao.Account fromString(String value) {
+                return null;
+            }
+        });
+        studentPicker.valueProperty().addListener((o, a, b) -> updateStudentHint());
+
+        Label dueLabel = new Label("Due date");
+        dueLabel.getStyleClass().add("field-label");
+
+        duePicker.getStyleClass().add("field");
+        duePicker.setPrefWidth(160);
+        duePicker.setPrefHeight(38);
+        duePicker.setEditable(false);
+        duePicker.setTooltip(new Tooltip("Defaults to " + Book.LOAN_DAYS + " days from today"));
+
+        studentHint.getStyleClass().add("hint-label");
+        studentHint.setFont(Font.font("SansSerif", 11));
+        studentHint.setWrapText(true);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox row = new HBox(10, studentLabel, studentPicker, dueLabel, duePicker, spacer, studentHint);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getStyleClass().add("desk-bar");
+        row.setPadding(new Insets(12, 14, 12, 14));
+        return row;
+    }
+
     private Node buildFilterRow() {
-        search.setPromptText("Search by title, author, or category\u2026");
+        search.setPromptText("Search by title, author, or borrower\u2026");
         search.getStyleClass().add("field");
         search.setPrefHeight(40);
         search.setMaxWidth(Double.MAX_VALUE);
@@ -96,7 +160,7 @@ public class CirculationView extends VBox {
         HBox.setHgrow(search, Priority.ALWAYS);
 
         category.getStyleClass().add("combo-box");
-        category.setPrefWidth(190);
+        category.setPrefWidth(175);
         category.setPrefHeight(40);
         category.setValue("All Categories");
         category.valueProperty().addListener((o, a, b) -> {
@@ -105,15 +169,23 @@ public class CirculationView extends VBox {
             }
         });
 
+        statusFilter.getStyleClass().add("combo-box");
+        statusFilter.setPrefWidth(140);
+        statusFilter.setPrefHeight(40);
+        statusFilter.getItems().addAll(FILTER_ALL, FILTER_AVAILABLE, FILTER_ON_LOAN, FILTER_OVERDUE);
+        statusFilter.setValue(FILTER_ALL);
+        statusFilter.valueProperty().addListener((o, a, b) -> reloadRows());
+
         Button clear = new Button("Clear");
         clear.getStyleClass().add("ghost-btn");
         clear.setPrefHeight(40);
         clear.setOnAction(e -> {
             search.clear();
             category.setValue("All Categories");
+            statusFilter.setValue(FILTER_ALL);
         });
 
-        HBox row = new HBox(10, search, category, clear);
+        HBox row = new HBox(10, search, category, statusFilter, clear);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
@@ -127,7 +199,7 @@ public class CirculationView extends VBox {
 
         TableColumn<Book, String> titleCol = new TableColumn<>("Title");
         titleCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getTitle()));
-        titleCol.setMinWidth(230);
+        titleCol.setMinWidth(220);
         titleCol.setCellFactory(col -> new TableCell<>() {
             @Override
             protected void updateItem(String value, boolean empty) {
@@ -159,20 +231,23 @@ public class CirculationView extends VBox {
 
         TableColumn<Book, String> categoryCol = new TableColumn<>("Category");
         categoryCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getCategory()));
-        categoryCol.setMinWidth(110);
+        categoryCol.setMinWidth(105);
 
-        TableColumn<Book, String> typeCol = new TableColumn<>("Type");
-        typeCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getBookType()));
-        typeCol.setMinWidth(85);
+        TableColumn<Book, String> borrowerCol = new TableColumn<>("Borrower");
+        borrowerCol.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().getBorrower() == null || data.getValue().getBorrower().isBlank()
+                        ? "\u2014" : data.getValue().getBorrower()));
+        borrowerCol.setMinWidth(130);
 
-        TableColumn<Book, String> detailsCol = new TableColumn<>("Details");
-        detailsCol.setCellValueFactory(data -> new SimpleStringProperty(
-                data.getValue().getExtraInfo() == null ? "\u2014" : data.getValue().getExtraInfo()));
-        detailsCol.setMinWidth(100);
+        TableColumn<Book, String> dueCol = new TableColumn<>("Due");
+        dueCol.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().isBorrowed() ? data.getValue().dueText() : "\u2014"));
+        dueCol.setMinWidth(95);
 
         TableColumn<Book, String> statusCol = new TableColumn<>("Status");
-        statusCol.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().statusText()));
-        statusCol.setMinWidth(130);
+        statusCol.setCellValueFactory(data -> new SimpleStringProperty(
+                data.getValue().isBorrowed() ? data.getValue().loanStatusText() : data.getValue().statusText()));
+        statusCol.setMinWidth(125);
         statusCol.setCellFactory(col -> new TableCell<>() {
             @Override
             protected void updateItem(String value, boolean empty) {
@@ -183,26 +258,16 @@ public class CirculationView extends VBox {
                     return;
                 }
                 Book book = getTableRow().getItem();
-                Label pill = new Label(book.statusText());
-                pill.getStyleClass().add(book.isBorrowed() ? "pill-out" : "pill-available");
-
-                if (book.isBorrowed() && book.getBorrower() != null && !book.getBorrower().isBlank()) {
-                    Label borrower = new Label("by " + book.getBorrower());
-                    borrower.getStyleClass().add("muted");
-                    borrower.setFont(Font.font("SansSerif", 9.5));
-                    VBox box = new VBox(3, pill, borrower);
-                    box.setAlignment(Pos.CENTER_LEFT);
-                    setGraphic(box);
-                } else {
-                    setGraphic(pill);
-                }
+                Label pill = new Label(book.isBorrowed() ? book.loanStatusText() : book.statusText());
+                pill.getStyleClass().add(book.isBorrowed() ? book.loanPillStyle() : "pill-available");
+                setGraphic(pill);
                 setText(null);
             }
         });
 
         TableColumn<Book, Void> actionCol = new TableColumn<>("Action");
-        actionCol.setMinWidth(105);
-        actionCol.setMaxWidth(130);
+        actionCol.setMinWidth(100);
+        actionCol.setMaxWidth(120);
         actionCol.setSortable(false);
         actionCol.setCellFactory(col -> new TableCell<>() {
             private final Button action = new Button();
@@ -212,7 +277,11 @@ public class CirculationView extends VBox {
                 action.setOnAction(e -> {
                     Book book = getTableRow() == null ? null : getTableRow().getItem();
                     if (book != null) {
-                        toggle(book);
+                        if (book.isBorrowed()) {
+                            returnBook(book);
+                        } else {
+                            issueBook(book);
+                        }
                     }
                 });
             }
@@ -225,16 +294,34 @@ public class CirculationView extends VBox {
                     return;
                 }
                 Book book = getTableRow().getItem();
-                action.setText(book.isBorrowed() ? "Return" : "Borrow");
                 action.getStyleClass().remove("row-btn-danger");
                 if (book.isBorrowed()) {
+                    action.setText("Return");
                     action.getStyleClass().add("row-btn-danger");
+                    action.setDisable(false);
+                    action.setTooltip(null);
+                } else {
+                    action.setText("Issue");
+                    boolean blocked = studentPicker.getValue() == null || loansAtLimit;
+                    action.setDisable(blocked);
+                    action.setTooltip(blocked
+                            ? new Tooltip(studentPicker.getValue() == null
+                                    ? "Choose a student first"
+                                    : "This student already has " + Book.MAX_LOANS + " books")
+                            : null);
                 }
                 setGraphic(action);
             }
         });
 
-        table.getColumns().setAll(List.of(titleCol, categoryCol, typeCol, detailsCol, statusCol, actionCol));
+        List<TableColumn<Book, ?>> columns = new ArrayList<>();
+        columns.add(titleCol);
+        columns.add(categoryCol);
+        columns.add(borrowerCol);
+        columns.add(dueCol);
+        columns.add(statusCol);
+        columns.add(actionCol);
+        table.getColumns().setAll(columns);
 
         VBox card = new VBox(table);
         card.getStyleClass().add("card");
@@ -257,6 +344,7 @@ public class CirculationView extends VBox {
     // ------------------------------------------------------------------
 
     public void refresh() {
+        loadStudents();
         try {
             updatingFilters = true;
             String selected = category.getValue();
@@ -268,37 +356,141 @@ public class CirculationView extends VBox {
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load categories", ex.getMessage());
         }
+        updateStudentHint();
         reloadRows();
+    }
+
+    private void loadStudents() {
+        Integer keep = studentPicker.getValue() == null ? null : studentPicker.getValue().id();
+        try {
+            List<UserDao.Account> students = userDao.listStudents();
+            studentPicker.getItems().setAll(students);
+            if (keep != null) {
+                for (UserDao.Account account : students) {
+                    if (account.id() == keep) {
+                        studentPicker.setValue(account);
+                        break;
+                    }
+                }
+            }
+        } catch (DaoException ex) {
+            Dialogs.error(main.window(), "Could not load students", ex.getMessage());
+        }
+    }
+
+    private void updateStudentHint() {
+        UserDao.Account student = studentPicker.getValue();
+        if (student == null) {
+            loansAtLimit = false;
+            studentHint.setText("No student selected");
+            studentHint.getStyleClass().remove("field-error");
+            studentHint.getStyleClass().add("hint-label");
+        } else {
+            try {
+                int count = dao.countByBorrower(student.id());
+                loansAtLimit = count >= Book.MAX_LOANS;
+                studentHint.setText(student.displayName() + " \u2022 " + count + " of "
+                        + Book.MAX_LOANS + " books on loan"
+                        + (loansAtLimit ? " \u2014 limit reached" : ""));
+            } catch (DaoException ex) {
+                loansAtLimit = false;
+                studentHint.setText(student.displayName());
+            }
+            studentHint.getStyleClass().remove("field-error");
+        }
+        table.refresh();
     }
 
     private void reloadRows() {
         try {
             List<Book> books = dao.search(search.getText(), category.getValue());
-            rows.setAll(books);
-            long borrowed = books.stream().filter(Book::isBorrowed).count();
-            countLabel.setText(books.size() + (books.size() == 1 ? " title" : " titles")
+            String status = statusFilter.getValue();
+            List<Book> filtered = new ArrayList<>();
+            for (Book book : books) {
+                if (FILTER_AVAILABLE.equals(status) && book.isBorrowed()) {
+                    continue;
+                }
+                if (FILTER_ON_LOAN.equals(status) && !book.isBorrowed()) {
+                    continue;
+                }
+                if (FILTER_OVERDUE.equals(status) && !book.isOverdue()) {
+                    continue;
+                }
+                filtered.add(book);
+            }
+            rows.setAll(filtered);
+            long borrowed = filtered.stream().filter(Book::isBorrowed).count();
+            countLabel.setText(filtered.size() + (filtered.size() == 1 ? " title" : " titles")
                     + "  \u2022  " + borrowed + " out on loan");
-            hintLabel.setText(countLabel.getText());
         } catch (DaoException ex) {
             Dialogs.error(main.window(), "Could not load circulation", ex.getMessage());
         }
     }
 
-    private void toggle(Book book) {
-        boolean returning = book.isBorrowed();
+    // ------------------------------------------------------------------
+    // Actions
+    // ------------------------------------------------------------------
+
+    private void issueBook(Book book) {
+        UserDao.Account student = studentPicker.getValue();
+        if (student == null) {
+            Dialogs.error(main.window(), "Choose a student",
+                    "Select the student who is borrowing the book first.");
+            return;
+        }
+        LocalDate due = duePicker.getValue();
+        if (due == null) {
+            Dialogs.error(main.window(), "Choose a due date",
+                    "Pick the date the book must be returned.");
+            return;
+        }
+        if (due.isBefore(LocalDate.now())) {
+            Dialogs.error(main.window(), "Due date is in the past",
+                    "Choose today or a later date for the due date.");
+            return;
+        }
         try {
-            if (returning) {
-                dao.setBorrowed(book.getId(), false, null);
-                main.setStatus("Returned \"" + book.getTitle() + "\" to the shelves.");
-            } else {
-                dao.setBorrowed(book.getId(), true, main.user().getDisplayName());
-                main.setStatus("Checked out \"" + book.getTitle() + "\" to "
-                        + main.user().getDisplayName() + ".");
+            int count = dao.countByBorrower(student.id());
+            if (count >= Book.MAX_LOANS) {
+                Dialogs.error(main.window(), "Borrowing limit reached",
+                        student.displayName() + " already has " + count + " of "
+                                + Book.MAX_LOANS + " allowed books.\n"
+                                + "Return one before issuing another.");
+                return;
             }
+            boolean ok = dao.checkout(book.getId(), student.id(), student.displayName(),
+                    due.atTime(23, 59));
+            if (!ok) {
+                Dialogs.error(main.window(), "Book already on loan",
+                        "\"" + book.getTitle() + "\" was just issued to another reader.");
+                refresh();
+                return;
+            }
+            main.setStatus("Issued \"" + book.getTitle() + "\" to " + student.displayName()
+                    + " \u2022 due " + due);
             refresh();
         } catch (DaoException ex) {
-            Dialogs.error(main.window(), returning ? "Could not return the book" : "Could not borrow the book",
-                    ex.getMessage());
+            Dialogs.error(main.window(), "Could not issue the book", ex.getMessage());
+        }
+    }
+
+    private void returnBook(Book book) {
+        try {
+            boolean ok = dao.checkin(book.getId());
+            if (!ok) {
+                Dialogs.error(main.window(), "Already returned",
+                        "\"" + book.getTitle() + "\" is no longer on loan.");
+                refresh();
+                return;
+            }
+            String who = book.getBorrower() == null || book.getBorrower().isBlank()
+                    ? null : book.getBorrower();
+            main.setStatus(who == null
+                    ? "Returned \"" + book.getTitle() + "\" to the shelves."
+                    : "Returned \"" + book.getTitle() + "\" from " + who + ".");
+            refresh();
+        } catch (DaoException ex) {
+            Dialogs.error(main.window(), "Could not return the book", ex.getMessage());
         }
     }
 }

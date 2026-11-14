@@ -12,11 +12,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/** All catalog reads and writes. */
+/** All catalog reads and writes, including the borrowing desk. */
 public final class BookDao {
 
     /** Aggregate numbers for the dashboard cards. */
-    public record Stats(int total, int available, int borrowed, int printed, int ebook) {
+    public record Stats(int total, int available, int borrowed, int printed, int ebook, int overdue) {
     }
 
     public List<Book> findAll() throws DaoException {
@@ -28,8 +28,9 @@ public final class BookDao {
         List<Object> params = new ArrayList<>();
 
         if (text != null && !text.isBlank()) {
-            sql.append(" AND (title LIKE ? OR author LIKE ? OR category LIKE ?)");
+            sql.append(" AND (title LIKE ? OR author LIKE ? OR category LIKE ? OR borrower LIKE ?)");
             String like = "%" + text.trim() + "%";
+            params.add(like);
             params.add(like);
             params.add(like);
             params.add(like);
@@ -55,6 +56,38 @@ public final class BookDao {
             throw new DaoException("Could not load the catalog.\n" + ex.getMessage(), ex);
         }
         return books;
+    }
+
+    /** Every book currently on loan to one account. */
+    public List<Book> findByBorrower(int userId) throws DaoException {
+        String sql = "SELECT * FROM books WHERE borrowed = 1 AND borrower_id = ? ORDER BY due_at, id";
+        List<Book> books = new ArrayList<>();
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    books.add(map(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new DaoException("Could not load your borrowed books.\n" + ex.getMessage(), ex);
+        }
+        return books;
+    }
+
+    /** Number of books currently on loan to one account. */
+    public int countByBorrower(int userId) throws DaoException {
+        String sql = "SELECT COUNT(*) FROM books WHERE borrowed = 1 AND borrower_id = ?";
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, userId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException ex) {
+            throw new DaoException("Could not count your borrowed books.\n" + ex.getMessage(), ex);
+        }
     }
 
     public void insert(Book book) throws DaoException {
@@ -107,17 +140,41 @@ public final class BookDao {
         }
     }
 
-    public void setBorrowed(int bookId, boolean borrowed, String borrower) throws DaoException {
-        String sql = "UPDATE books SET borrowed = ?, borrower = ?, borrowed_at = ? WHERE id = ?";
+    /**
+     * Issues a book to an account.
+     *
+     * <p>The UPDATE only matches a book that is still on the shelf, so two
+     * people clicking at the same moment cannot both get the same copy. A zero
+     * row count means somebody else was faster.</p>
+     */
+    public boolean checkout(int bookId, int borrowerId, String borrowerName, LocalDateTime dueAt)
+            throws DaoException {
+        String sql = "UPDATE books SET borrowed = 1, borrower_id = ?, borrower = ?, "
+                + "borrowed_at = ?, due_at = ? WHERE id = ? AND borrowed = 0";
         try (Connection c = Db.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setBoolean(1, borrowed);
-            ps.setString(2, borrowed ? borrower : null);
-            ps.setTimestamp(3, borrowed ? Timestamp.valueOf(LocalDateTime.now()) : null);
-            ps.setInt(4, bookId);
-            ps.executeUpdate();
+            LocalDateTime now = LocalDateTime.now();
+            ps.setInt(1, borrowerId);
+            ps.setString(2, borrowerName);
+            ps.setTimestamp(3, Timestamp.valueOf(now));
+            ps.setTimestamp(4, Timestamp.valueOf(dueAt == null ? now.plusDays(Book.LOAN_DAYS) : dueAt));
+            ps.setInt(5, bookId);
+            return ps.executeUpdate() == 1;
         } catch (SQLException ex) {
-            throw new DaoException("Could not update the borrowing status.\n" + ex.getMessage(), ex);
+            throw new DaoException("Could not issue that book.\n" + ex.getMessage(), ex);
+        }
+    }
+
+    /** Returns a book to the shelf and clears every loan field. */
+    public boolean checkin(int bookId) throws DaoException {
+        String sql = "UPDATE books SET borrowed = 0, borrower_id = NULL, borrower = NULL, "
+                + "borrowed_at = NULL, due_at = NULL WHERE id = ? AND borrowed = 1";
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, bookId);
+            return ps.executeUpdate() == 1;
+        } catch (SQLException ex) {
+            throw new DaoException("Could not return that book.\n" + ex.getMessage(), ex);
         }
     }
 
@@ -126,7 +183,8 @@ public final class BookDao {
                 + "COALESCE(SUM(borrowed = 0), 0) AS available, "
                 + "COALESCE(SUM(borrowed = 1), 0) AS borrowed, "
                 + "COALESCE(SUM(book_type = 'Printed'), 0) AS printed, "
-                + "COALESCE(SUM(book_type = 'E-Book'), 0) AS ebook "
+                + "COALESCE(SUM(book_type = 'E-Book'), 0) AS ebook, "
+                + "COALESCE(SUM(borrowed = 1 AND due_at IS NOT NULL AND due_at < NOW()), 0) AS overdue "
                 + "FROM books";
         try (Connection c = Db.getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -137,12 +195,13 @@ public final class BookDao {
                         rs.getInt("available"),
                         rs.getInt("borrowed"),
                         rs.getInt("printed"),
-                        rs.getInt("ebook"));
+                        rs.getInt("ebook"),
+                        rs.getInt("overdue"));
             }
         } catch (SQLException ex) {
             throw new DaoException("Could not compute library statistics.\n" + ex.getMessage(), ex);
         }
-        return new Stats(0, 0, 0, 0, 0);
+        return new Stats(0, 0, 0, 0, 0, 0);
     }
 
     public List<String> categories() throws DaoException {
@@ -172,8 +231,12 @@ public final class BookDao {
         book.setCoverFile(rs.getString("cover_file"));
         book.setBorrowed(rs.getBoolean("borrowed"));
         book.setBorrower(rs.getString("borrower"));
+        int borrowerId = rs.getInt("borrower_id");
+        book.setBorrowerId(rs.wasNull() ? null : borrowerId);
         Timestamp borrowedAt = rs.getTimestamp("borrowed_at");
         book.setBorrowedAt(borrowedAt == null ? null : borrowedAt.toLocalDateTime());
+        Timestamp dueAt = rs.getTimestamp("due_at");
+        book.setDueAt(dueAt == null ? null : dueAt.toLocalDateTime());
         return book;
     }
 }

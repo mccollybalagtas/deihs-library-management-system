@@ -6,13 +6,13 @@ public final class User {
     private final int id;
     private final String username;
     private final String displayName;
-    private final boolean admin;
+    private final Role role;
 
-    public User(int id, String username, String displayName, boolean admin) {
+    public User(int id, String username, String displayName, Role role) {
         this.id = id;
         this.username = username;
         this.displayName = displayName;
-        this.admin = admin;
+        this.role = role == null ? Role.STUDENT : role;
     }
 
     public int getId() {
@@ -27,8 +27,13 @@ public final class User {
         return displayName;
     }
 
+    public Role getRole() {
+        return role;
+    }
+
+    /** Kept for older call sites; the role is the real source of truth. */
     public boolean isAdmin() {
-        return admin;
+        return role == Role.ADMIN;
     }
 
     /** First letter used for the avatar badge. */
@@ -38,5 +43,10 @@ public final class User {
             return "?";
         }
         return source.substring(0, 1).toUpperCase();
+    }
+
+    /** Short label for the top bar, e.g. "Administrator". */
+    public String roleLabel() {
+        return role.label();
     }
 }
