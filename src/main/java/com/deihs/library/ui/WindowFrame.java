@@ -85,7 +85,7 @@ public class WindowFrame extends BorderPane {
 
         Node logo = buildLogo(24);
 
-        Label title = new Label("Balagtas DEIHS Library Management System");
+        Label title = new Label("DEIHS Library Management System");
         title.getStyleClass().add("title-text");
 
         Region spacer = new Region();

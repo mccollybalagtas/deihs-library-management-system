@@ -110,7 +110,7 @@ public class LoginView extends StackPane {
 
         Label quote = new Label("\u201CRead. Learn. Grow.\u201D");
         quote.setFont(Font.font("Serif", FontPosture.ITALIC, 21));
-        quote.setTextFill(Color.web("#DCEBFF"));
+        quote.setTextFill(Color.web("#c5f0fd"));
         quote.setWrapText(true);
 
         Region divider = new Region();
@@ -124,9 +124,9 @@ public class LoginView extends StackPane {
         Region gap2 = new Region();
         gap2.setPrefHeight(18);
 
-        Label school = new Label("BALAGTAS DEIHS\nSCHOOL LIBRARY");
+        Label school = new Label("        D E I H S\nSCHOOL LIBRARY");
         school.setFont(Font.font("SansSerif", FontWeight.BOLD, 10));
-        school.setTextFill(Color.web("#9FB6D4"));
+        school.setTextFill(Color.web("#c9edfc"));
 
         brand.getChildren().addAll(heading, spacer, quote, gap, divider, gap2, school);
         return brand;
