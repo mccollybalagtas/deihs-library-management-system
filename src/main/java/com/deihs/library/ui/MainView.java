@@ -36,21 +36,35 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** The signed-in shell: sidebar, top bar, footer and the page area. */
+/**
+ * The signed-in shell: sidebar, top bar, footer and the page area.
+ *
+ * Part of: Application shell, shown after a successful sign-in.
+ * Used by: App.onSignedIn() creates it; CollectionPanel, CirculationView,
+ *          CatalogView, MyLoansView, UsersView and DashboardView call back into it.
+ * Key rules: every page is created lazily and cached, and the sidebar entries are
+ *            chosen from Role permissions, never from role names.
+ */
 public class MainView extends BorderPane {
 
+    // ============================================================
+    // PART: Shell state
+    // ============================================================
     private final Stage stage;
     private final User user;
     private final Runnable onLogout;
 
+    // Two stacked layers: the page fills "content", toasts float above it.
     private final StackPane content = new StackPane();
     private final StackPane toastLayer = new StackPane();
     private final StackPane contentHost = new StackPane(content, toastLayer);
     private final Toasts toasts = new Toasts(toastLayer);
     private final Label pageTitle = new Label();
     private final Label statusLabel = new Label();
+    // Insertion order matters: it is also the sidebar order and the navigation whitelist.
     private final Map<String, Button> navButtons = new LinkedHashMap<>();
 
+    // Which page is open now, and one cached instance per page.
     private String currentKey = "dashboard";
     private DashboardView dashboard;
     private CollectionPanel collection;
@@ -59,13 +73,21 @@ public class MainView extends BorderPane {
     private MyLoansView myLoans;
     private UsersView users;
 
+    /**
+     * WHAT: Builds the sidebar, top bar, page area and footer, then opens the dashboard.
+     * WHY: This is the frame every signed-in screen lives inside, so it also owns
+     * navigation state and the keyboard shortcut.
+     * CALLED BY: App.onSignedIn(), with the user returned by UserDao.login().
+     */
     public MainView(Stage stage, User user, Runnable onLogout) {
         this.stage = stage;
         this.user = user;
         this.onLogout = onLogout;
 
+        // Step 1: the sidebar is fixed on the left and does not scroll.
         setLeft(buildSidebar());
 
+        // Step 2: the page area sits under the top bar and above the footer.
         content.setStyle("-fx-background-color: #F3F7FD;");
         content.setAlignment(Pos.TOP_LEFT);
 
@@ -73,10 +95,13 @@ public class MainView extends BorderPane {
         VBox.setVgrow(contentHost, Priority.ALWAYS);
         setCenter(center);
 
+        // Step 3: show the dashboard and put the signed-in user in the status bar.
         navigate("dashboard");
         setStatus("Signed in as " + user.getDisplayName() + " \u2022 " + user.getRole().label());
 
         // Ctrl+F (Cmd+F on macOS) jumps to the search box on the open page.
+        // The listener waits for the scene because accelerators only exist once
+        // the view has been attached to one.
         sceneProperty().addListener((o, old, scene) -> {
             if (scene != null) {
                 scene.getAccelerators().put(
@@ -86,18 +111,22 @@ public class MainView extends BorderPane {
         });
     }
 
+    /** The window that dialogs should be parented to. */
     public Window window() {
         return stage;
     }
 
+    /** The signed-in account. */
     public User user() {
         return user;
     }
 
+    /** The signed-in account's role, used for permission checks. */
     public Role role() {
         return user.getRole();
     }
 
+    /** Writes a message into the footer status line. */
     public void setStatus(String message) {
         statusLabel.setText("\u25CF  " + message);
     }
@@ -117,7 +146,12 @@ public class MainView extends BorderPane {
         toasts.info(message);
     }
 
-    /** Focuses the search box on whichever page is open. */
+    /**
+     * WHAT: Focuses the search box on whichever page is open.
+     * WHY: Ctrl+F must do something sensible on every page, but each page owns
+     * its own search field, so this method dispatches by the current page key.
+     * CALLED BY: The Ctrl+F accelerator registered in the constructor.
+     */
     public void focusSearch() {
         switch (currentKey) {
             case "collection" -> {
@@ -153,17 +187,32 @@ public class MainView extends BorderPane {
         }
     }
 
-    /** Asks for confirmation, then returns to the sign-in screen. */
+    /**
+     * WHAT: Asks for confirmation, then returns to the sign-in screen.
+     * WHY: Signing out throws away the current page state, so it should not
+     * happen on a stray click.
+     * CALLED BY: The sidebar Sign out button and the top-bar Sign out button.
+     */
     private void confirmLogout() {
         if (Dialogs.confirm(stage, "Sign out", "Sign out of the library system?")) {
+            // onLogout is App.showLogin(), which swaps the frame content back to LoginView.
             onLogout.run();
         }
     }
 
+    /**
+     * WHAT: Shows the page for a key, falling back to the dashboard for unknown keys.
+     * WHY: Buttons can only navigate to pages their role may see, but a stale or
+     * wrong key must never leave the content area empty.
+     * CALLED BY: The constructor, navButton handlers, DashboardView's "View all",
+     * and refreshData().
+     */
     public void navigate(String requestedKey) {
+        // Step 1: only keys that have a sidebar button are valid for this role.
         final String key = navButtons.containsKey(requestedKey) ? requestedKey : "dashboard";
         currentKey = key;
 
+        // Step 2: update the heading in the top bar.
         pageTitle.setText(switch (key) {
             case "collection" -> "Book Collection";
             case "circulation" -> "Circulation";
@@ -173,6 +222,7 @@ public class MainView extends BorderPane {
             default -> "Library Dashboard";
         });
 
+        // Step 3: move the "active" style class to the matching sidebar button.
         navButtons.forEach((name, button) -> {
             button.getStyleClass().remove("active");
             if (name.equals(key)) {
@@ -180,6 +230,9 @@ public class MainView extends BorderPane {
             }
         });
 
+        // Step 4: create the page the first time it is opened, otherwise refresh
+        // the cached instance so its data is current. Only one page is in the
+        // content area at a time.
         switch (key) {
             case "collection" -> {
                 if (collection == null) {
@@ -232,8 +285,16 @@ public class MainView extends BorderPane {
         }
     }
 
-    /** Rebuilds every cached page so counts and grids stay accurate. */
+    /**
+     * WHAT: Throws away every cached page and reopens the current one.
+     * WHY: After a book is added or edited, the other pages still hold old lists
+     * and counters, so they must be rebuilt from the database.
+     * CALLED BY: addBook() here, and BookCard / CollectionPanel / CatalogView via
+     * a MainView::refreshData callback.
+     */
     public void refreshData() {
+        // Clearing the references is enough: navigate() creates a fresh instance
+        // for any page that is null.
         dashboard = null;
         collection = null;
         circulation = null;
@@ -243,20 +304,31 @@ public class MainView extends BorderPane {
         navigate(currentKey);
     }
 
+    /**
+     * WHAT: Opens the add-book dialog, saves the result and refreshes the shell.
+     * WHY: Several pages offer an "Add Book" action, so the permission check and
+     * the save live here instead of being repeated in each page.
+     * CALLED BY: DashboardView's Add Book button and CollectionPanel's Add Book button.
+     */
     public void addBook() {
+        // Step 1: the Role decides, so a hidden button cannot be bypassed by
+        // calling this method directly.
         if (!user.getRole().canManageBooks()) {
             Dialogs.error(stage, "Not allowed",
                     "Only an administrator can add or change books in the catalog.");
             return;
         }
+        // Step 2: the dialog returns null when it was cancelled.
         Book book = BookFormView.show(stage, null);
         if (book == null) {
             return;
         }
+        // Step 3: save, then tell the user through both the status line and a toast.
         try {
             new BookDao().insert(book);
             setStatus("Added \"" + book.getTitle() + "\" to the catalog.");
             toastSuccess("Added \"" + book.getTitle() + "\" to the catalog.");
+            // Step 4: rebuild the pages so the new title appears everywhere.
             refreshData();
         } catch (DaoException ex) {
             Dialogs.error(stage, "Could not add the book", ex.getMessage());
@@ -266,8 +338,19 @@ public class MainView extends BorderPane {
     // ------------------------------------------------------------------
     // Chrome
     // ------------------------------------------------------------------
+    // ============================================================
+    // PART: Building the sidebar
+    // ============================================================
 
+    /**
+     * WHAT: Builds the fixed-width sidebar: brand, menu label, role-filtered
+     * navigation buttons, sign-out and a small footer.
+     * WHY: This is the only navigation the user has, and filtering it here means
+     * a role never sees a link to a page it cannot open.
+     * CALLED BY: The constructor, through setLeft(buildSidebar()).
+     */
     private VBox buildSidebar() {
+        // Step 1: fixed width, so the page area always starts at the same place.
         VBox sidebar = new VBox(6);
         sidebar.getStyleClass().add("sidebar");
         sidebar.setPrefWidth(238);
@@ -275,6 +358,7 @@ public class MainView extends BorderPane {
         sidebar.setMaxWidth(238);
         sidebar.setPadding(new Insets(20, 14, 16, 14));
 
+        // Step 2: brand block: logo plus the short school name.
         StackPane logo = new StackPane();
         logo.setPrefSize(40, 40);
         logo.setMinSize(40, 40);
@@ -303,27 +387,36 @@ public class MainView extends BorderPane {
         brand.setAlignment(Pos.CENTER_LEFT);
         brand.setPadding(new Insets(0, 0, 18, 4));
 
+        // Step 3: small section label above the navigation buttons.
         Label menu = new Label("MAIN MENU");
         menu.setFont(Font.font("SansSerif", FontWeight.BOLD, 8.5));
         menu.setTextFill(Color.web("#7E9CC0"));
         menu.setPadding(new Insets(0, 0, 4, 8));
 
+        // Step 4: Dashboard is visible to everyone; the rest are added only when
+        // the Role grants the matching permission. Role is asked, not compared by name.
         sidebar.getChildren().addAll(brand, menu, navButton("dashboard", "\u25A6", "Dashboard"));
 
         if (user.getRole().canManageBooks()) {
+            // Book management is administrator-only.
             sidebar.getChildren().add(navButton("collection", "\u25A4", "Book Collection"));
         }
         if (user.getRole().canRunDesk()) {
+            // Librarians and administrators issue and return books at the desk.
             sidebar.getChildren().add(navButton("circulation", "\u21C4", "Circulation"));
         }
         if (user.getRole().canBorrowForSelf()) {
+            // Students get their own loans page instead of the desk page.
             sidebar.getChildren().add(navButton("myloans", "\u21C4", "My Loans"));
         }
+        // Every role may browse the catalog.
         sidebar.getChildren().add(navButton("catalog", "\u2630", "Catalog"));
         if (user.getRole().canManageUsers()) {
+            // Account management is administrator-only.
             sidebar.getChildren().add(navButton("users", "\u263A", "Accounts"));
         }
 
+        // Step 5: the spacer pushes the sign-out button and footer to the bottom.
         Region spacer = new Region();
         VBox.setVgrow(spacer, Priority.ALWAYS);
 
@@ -346,6 +439,12 @@ public class MainView extends BorderPane {
         return sidebar;
     }
 
+    /**
+     * WHAT: Creates one sidebar button and registers it in navButtons.
+     * WHY: navigate() needs the map to validate keys and to move the "active"
+     * style, so every button must be registered at creation time.
+     * CALLED BY: buildSidebar() for each visible page.
+     */
     private Button navButton(String key, String icon, String text) {
         Button button = new Button(icon + "    " + text);
         button.getStyleClass().add("side-btn");
@@ -355,9 +454,21 @@ public class MainView extends BorderPane {
         return button;
     }
 
+    // ============================================================
+    // PART: Building the top bar and footer
+    // ============================================================
+
+    /**
+     * WHAT: Builds the bar above the page: title on the left, then date, user
+     * name, avatar and a second sign-out button on the right.
+     * WHY: The page title is a shared label that navigate() updates, so it cannot
+     * be created inside each page.
+     * CALLED BY: The constructor, when assembling the centre column.
+     */
     private HBox buildTopBar() {
         pageTitle.getStyleClass().add("page-title");
 
+        // The spacer takes all free width, which pushes everything after it right.
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -369,11 +480,15 @@ public class MainView extends BorderPane {
         name.setFont(Font.font("SansSerif", FontWeight.BOLD, 12));
         name.setTextFill(Color.web("#1F2933"));
 
+        // The avatar is just the first letter; the tooltip supplies the full
+        // name and role so the circle stays small.
         Label avatar = new Label(user.initial());
         avatar.getStyleClass().add("avatar");
         avatar.setTooltip(new Tooltip(user.getRole().label()
                 + " \u2022 " + user.getDisplayName()));
 
+        // A second sign-out entry in the top bar; excluded from tab order so Tab
+        // stays inside the page.
         Button signOut = new Button("\u21A9  Sign out");
         signOut.getStyleClass().add("ghost-btn");
         signOut.setPrefHeight(32);
@@ -387,6 +502,13 @@ public class MainView extends BorderPane {
         return bar;
     }
 
+    /**
+     * WHAT: Builds the thin footer with the status message on the left and the
+     * version label on the right.
+     * WHY: setStatus() writes into statusLabel, so the label must exist once and
+     * be reused for every message.
+     * CALLED BY: The constructor, when assembling the centre column.
+     */
     private HBox buildFooter() {
         statusLabel.getStyleClass().add("status-ok");
         statusLabel.setFont(Font.font("SansSerif", FontWeight.BOLD, 10));

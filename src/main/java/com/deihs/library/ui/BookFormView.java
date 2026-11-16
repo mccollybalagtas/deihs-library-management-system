@@ -29,15 +29,33 @@ import javafx.stage.Window;
 import java.io.File;
 import java.io.IOException;
 
-/** Add / edit dialog. Returns the finished book, or {@code null} when cancelled. */
+/**
+ * Add / edit dialog. Returns the finished book, or {@code null} when cancelled.
+ *
+ * Part of: Book add / edit dialog.
+ * Used by: MainView.addBook(), CatalogView and BookCard, which pass the window to
+ *          parent the dialog to and the book to edit (or null to add).
+ * Key rules: Save stays disabled until title, author and category are filled, and
+ *            the method returns null for Cancel so callers can skip the database write.
+ */
 public final class BookFormView {
 
+    // Static-only helper: there is no reason to create an instance.
     private BookFormView() {
     }
 
+    /**
+     * WHAT: Shows the add/edit dialog, validates the fields and saves any chosen
+     * cover image, then returns the finished Book.
+     * WHY: Add and edit share the same form, so one method handles both and the
+     * caller only has to pass null for a new book.
+     * CALLED BY: MainView.addBook(), CatalogView (edit) and BookCard (edit).
+     */
     public static Book show(Window owner, Book existing) {
+        // existing == null means "add"; otherwise the same object is edited in place.
         boolean isNew = existing == null;
 
+        // Step 1: create the dialog. initOwner keeps it above the main window.
         Dialog<Book> dialog = new Dialog<>();
         dialog.setTitle(isNew ? "Add a Book" : "Edit Book");
         dialog.setHeaderText(isNew
@@ -47,12 +65,21 @@ public final class BookFormView {
         dialog.setResizable(true);
         Dialogs.style(dialog.getDialogPane());
 
+        // Step 2: the confirm button's text depends on the mode, and OK_DONE marks
+        // it as the button that produces a result.
         ButtonType saveType = new ButtonType(isNew ? "Add Book" : "Save Changes", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
 
+        // Step 3: the guard asks before Cancel or the window close button throws
+        // away typing. It is wired to the fields near the end of this method.
         FormSupport.DirtyGuard guard = new FormSupport.DirtyGuard(
                 "You have not saved this book yet. Close without saving?");
 
+        // ============================================================
+        // PART: Fields and starting values
+        // ============================================================
+        // In edit mode every field starts from the existing book; in add mode it
+        // starts empty (or from a sensible default).
         TextField title = new TextField(existing == null ? "" : existing.getTitle());
         title.setPromptText("Book title");
         title.getStyleClass().add("field");
@@ -63,13 +90,18 @@ public final class BookFormView {
         author.getStyleClass().add("field");
         author.setPrefHeight(38);
 
+        // Editable means the user can type a new category as well as pick one.
+        // The typed text lives in getEditor(), so the validation rules watch that
+        // control rather than the ComboBox value itself.
         ComboBox<String> category = new ComboBox<>();
         category.setEditable(true);
         category.getStyleClass().add("combo-box");
         category.setMaxWidth(Double.MAX_VALUE);
         category.setPrefHeight(38);
+        // Preset choices keep the dialog usable even if the database read fails.
         category.getItems().addAll("Fiction", "Filipiniana", "Programming", "Mathematics",
                 "Science", "History", "Reference", "Archive");
+        // Merge in categories already used in the database, skipping duplicates.
         try {
             for (String value : new BookDao().categories()) {
                 if (!category.getItems().contains(value)) {
@@ -79,9 +111,12 @@ public final class BookFormView {
         } catch (DaoException ignored) {
             // The preset list is enough when the database cannot be read here.
         }
+        // Default for a new book; the stored value when editing.
         category.setValue(existing == null || existing.getCategory() == null
                 ? "Fiction" : existing.getCategory());
 
+        // The type decides how the title is described elsewhere (printed, e-book
+        // or archive copy).
         ComboBox<String> type = new ComboBox<>();
         type.getItems().addAll(Book.TYPE_PRINTED, Book.TYPE_EBOOK, Book.TYPE_ARCHIVE);
         type.getStyleClass().add("combo-box");
@@ -97,25 +132,45 @@ public final class BookFormView {
         extra.setPrefHeight(38);
 
         // ---------------- Cover ----------------
+        // ============================================================
+        // PART: Cover preview and image picking
+        // ============================================================
+        // A throwaway Book is used only to render the preview. It is never saved;
+        // the real Book is built from the fields when Save is pressed.
         Book previewBook = new Book();
         previewBook.setTitle(existing == null ? "New Book" : existing.getTitle());
         previewBook.setAuthor(existing == null ? "Author" : existing.getAuthor());
         previewBook.setCategory(existing == null ? "Fiction" : existing.getCategory());
         previewBook.setCoverFile(existing == null ? null : existing.getCoverFile());
 
+        // These one-element arrays work around Java's "effectively final" rule for
+        // lambdas. A lambda may read a local variable but may not assign it; it can
+        // still change what is inside an array. Each slot acts as a small shared
+        // variable used by the buttons and the save handler below:
+        //   picked[0]        - image file chosen in this session, or null
+        //   removeCover[0]   - true once the user asks to delete the stored cover
+        //   existingCover[0] - cover path the book had when the dialog opened
         final File[] picked = {null};
         final boolean[] removeCover = {false};
         final String[] existingCover = {existing == null ? null : existing.getCoverFile()};
 
+        // Fixed-size preview box. Setting min, pref and max to the same size stops
+        // the layout from stretching the cover when the dialog is resized.
         StackPane preview = new StackPane(Covers.node(previewBook, 132, 174));
         preview.setPrefSize(132, 174);
         preview.setMinSize(132, 174);
         preview.setMaxSize(132, 174);
 
+        // WHAT: Rebuilds the preview image from the current field text and cover choice.
+        // WHY: The preview should match what Save will store, so it is refreshed on
+        // every edit instead of being drawn once at the start.
+        // CALLED BY: the three text listeners below, and the Choose / Remove buttons.
         Runnable refreshPreview = () -> {
             previewBook.setTitle(blankTo(title.getText(), "New Book"));
             previewBook.setAuthor(blankTo(author.getText(), "Author"));
             previewBook.setCategory(blankTo(category.getEditor().getText(), "Fiction"));
+            // A newly picked file is drawn straight from disk. Otherwise the preview
+            // falls back to the stored cover, unless the user asked to remove it.
             Node node;
             if (picked[0] != null) {
                 node = Covers.nodeFromFile(picked[0], 132, 174);
@@ -123,9 +178,12 @@ public final class BookFormView {
                 previewBook.setCoverFile(removeCover[0] ? null : existingCover[0]);
                 node = Covers.node(previewBook, 132, 174);
             }
+            // setAll replaces the old image instead of stacking a new one on top.
             preview.getChildren().setAll(node);
         };
 
+        // Opens the system file picker. The filters only narrow what the user sees;
+        // the file itself is handled again when Save is pressed.
         Button choose = new Button("Choose image\u2026");
         choose.getStyleClass().add("ghost-btn");
         choose.setMaxWidth(Double.MAX_VALUE);
@@ -135,8 +193,10 @@ public final class BookFormView {
             chooser.getExtensionFilters().addAll(
                     new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp"),
                     new FileChooser.ExtensionFilter("All files", "*.*"));
+            // showOpenDialog blocks until the user picks a file or cancels.
             File file = chooser.showOpenDialog(owner);
             if (file != null) {
+                // A picked file wins over a pending removal, so reset that flag.
                 picked[0] = file;
                 removeCover[0] = false;
                 guard.markDirty();
@@ -144,6 +204,8 @@ public final class BookFormView {
             }
         });
 
+        // Marks the stored cover for deletion. The file is not deleted yet; that
+        // happens only after Save succeeds, so Cancel leaves everything untouched.
         Button clear = new Button("Remove cover");
         clear.getStyleClass().add("ghost-btn");
         clear.setMaxWidth(Double.MAX_VALUE);
@@ -163,11 +225,19 @@ public final class BookFormView {
         coverBox.setAlignment(Pos.TOP_CENTER);
         coverBox.setPadding(new Insets(4, 0, 0, 0));
 
+        // Live preview: every field that appears on the cover refreshes it as the
+        // user types. The category is read from the ComboBox editor because the
+        // box is editable and the typed text is not stored as the combo value.
         title.textProperty().addListener((o, a, b) -> refreshPreview.run());
         author.textProperty().addListener((o, a, b) -> refreshPreview.run());
         category.getEditor().textProperty().addListener((o, a, b) -> refreshPreview.run());
 
         // ---------------- Form ----------------
+        // ============================================================
+        // PART: Validation rules
+        // ============================================================
+        // One hint label per required field. A TextRule fills its label in when the
+        // field is wrong and hides it again when the field becomes valid.
         Label titleHint = hintLabel();
         Label authorHint = hintLabel();
         Label categoryHint = hintLabel();

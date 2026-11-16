@@ -2,6 +2,15 @@
    Balagtas DEIHS Library Management System - application theme
    ============================================================ */
 
+/* The one stylesheet for every screen. It is attached to the scene once, so a
+   selector here is shared by the login window and every page inside the app;
+   nothing is scoped per view.
+   Palette: navy #0D264C (primary), blue #17457F (hover and focus), gold #E2B84A
+   (scanner input), page background #F3F7FD. Headings use the app font; the
+   Playfair Display face is applied by the views themselves. */
+
+/* Every screen: the default font, base size, and the pale blue backdrop that
+   shows between and behind all cards. */
 .root {
     -fx-font-family: "SansSerif";
     -fx-font-size: 12px;
@@ -9,12 +18,21 @@
 }
 
 /* ---------- Shared ---------- */
+/* Reused by every page: headings, secondary text, the standard input look and
+   the button styles. Nothing here belongs to one screen only. */
+
+/* Page title (.h1) and section title (.h2) inside cards. */
 .h1 { -fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #0D264C; }
 .h2 { -fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: #0D264C; }
+/* Secondary text: subtitles, @usernames, "until ..." lines under a status pill. */
 .muted { -fx-text-fill: #667085; }
+/* Extra-small print for the second line inside a table cell. */
 .tiny { -fx-font-size: 10px; }
+/* Red message text, e.g. "That username is already taken." in a dialog. */
 .error-label { -fx-text-fill: #C0392B; -fx-font-size: 11px; -fx-font-weight: bold; }
 
+/* Any text or password input on any form: pale fill and a rounded grey border,
+   so plain TextFields, PasswordFields and the search boxes all look alike. */
 .field {
     -fx-background-color: #F8FAFF;
     -fx-border-color: #C9D6E6;
@@ -25,6 +43,7 @@
     -fx-text-fill: #1F2933;
     -fx-prompt-text-fill: #98A2B3;
 }
+/* Focus only recolours the border, so the field does not shift or resize. */
 .field:focused { -fx-border-color: #17457F; }
 
 /* Scanner input at the circulation desk: warmer tint so it stands apart. */
@@ -36,12 +55,15 @@
 }
 .scan-field:focused { -fx-border-color: #C9921B; }
 
+/* Small bold caption above an input, e.g. "Username" in the account dialogs. */
 .field-label {
     -fx-font-size: 10px;
     -fx-font-weight: bold;
     -fx-text-fill: #475467;
 }
 
+/* Dropdowns (role picker, sort selectors): the .field look with less side
+   padding, leaving room for the arrow button. */
 .combo-box {
     -fx-background-color: #F8FAFF;
     -fx-border-color: #C9D6E6;
@@ -52,6 +74,9 @@
 .combo-box:focused { -fx-border-color: #17457F; }
 .combo-box .list-cell { -fx-text-fill: #1F2933; }
 
+/* Primary action on a page or in a dialog: solid navy, white text, e.g.
+   "+ New Account" and "Sign in". The :disabled rule dims it while a form is
+   still invalid. */
 .primary-btn {
     -fx-background-color: #0D264C;
     -fx-text-fill: white;
@@ -64,6 +89,8 @@
 .primary-btn:hover { -fx-background-color: #17457F; }
 .primary-btn:disabled { -fx-opacity: 0.55; }
 
+/* Secondary action beside a primary one: white with a grey outline, e.g.
+   "Clear" next to the account search box. */
 .ghost-btn {
     -fx-background-color: white;
     -fx-text-fill: #0D264C;
@@ -76,6 +103,7 @@
 }
 .ghost-btn:hover { -fx-background-color: #EEF4FB; }
 
+/* Destructive action: red fill, e.g. the confirm button of a delete dialog. */
 .danger-btn {
     -fx-background-color: #C0392B;
     -fx-text-fill: white;
@@ -86,6 +114,8 @@
 }
 .danger-btn:hover { -fx-background-color: #A93226; }
 
+/* White rounded panel that groups content on every page: the account table
+   card, the dashboard sections and the sign-in form all sit inside one. */
 .card {
     -fx-background-color: white;
     -fx-background-radius: 14;
@@ -93,27 +123,42 @@
 }
 
 /* ---------- Login ---------- */
+/* Sign-in window: a navy brand panel on the left, a white form card on the right.
+   These classes are used only by the login screen, so they are safe to style
+   differently from the rest of the app. */
+
+/* Full-window backdrop behind the sign-in card. */
 .login-bg {
     -fx-background-color: linear-gradient(to bottom right, #07162C, #0D264C 48%, #16406F);
 }
+/* The white panel that holds both halves; the shadow lifts it off the backdrop. */
 .login-card {
     -fx-background-color: white;
     -fx-background-radius: 18;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.45), 46, 0.18, 0, 16);
 }
+/* Left half: the school name and logo on a navy gradient. The corners are
+   rounded on the left only, so the two halves meet in a straight seam. */
 .login-brand {
     -fx-background-color: linear-gradient(to bottom, #0D264C, #123A6B);
     -fx-background-radius: 18 0 0 18;
 }
+/* Right half: the username/password form on white, rounded on the right only. */
 .login-form {
     -fx-background-color: white;
     -fx-background-radius: 0 18 18 0;
 }
+/* Text link such as "Forgot password"; a plain label styled to look clickable. */
 .link { -fx-text-fill: #17457F; -fx-font-weight: bold; -fx-border-color: transparent; -fx-padding: 0; }
 .link:hover { -fx-underline: true; }
 
 /* ---------- App shell ---------- */
+/* Everything inside the main window: the left navigation rail, the top bar with
+   the page title and avatar, and the thin footer with the status line. */
+
+/* Left navigation rail behind the page buttons. */
 .sidebar { -fx-background-color: linear-gradient(to bottom, #0D264C, #123A6B); }
+/* One navigation button in the rail; left aligned so the icons line up. */
 .side-btn {
     -fx-background-color: transparent;
     -fx-text-fill: #D8E3EE;
@@ -125,12 +170,16 @@
     -fx-cursor: hand;
 }
 .side-btn:hover { -fx-background-color: rgba(255,255,255,0.08); }
+/* The current page's button: lighter fill plus a cyan bar on its left edge,
+   applied by adding the "active" class when the page is opened. */
 .side-btn.active {
     -fx-background-color: #1F4E78;
     -fx-text-fill: white;
     -fx-border-color: transparent transparent transparent #64DCEB;
     -fx-border-width: 0 0 0 3;
 }
+/* "Sign out" at the bottom of the rail; outlined rather than filled so it does
+   not compete with the page buttons. */
 .side-logout {
     -fx-background-color: transparent;
     -fx-text-fill: #F2C7C7;
@@ -145,13 +194,17 @@
 }
 .side-logout:hover { -fx-background-color: #1B3E6E; -fx-text-fill: white; }
 
+/* Top bar: white strip with a hairline underneath, holding the page title and
+   the signed-in user's initials. */
 .topbar {
     -fx-background-color: white;
     -fx-border-color: #DCE5F0;
     -fx-border-width: 0 0 1 0;
     -fx-padding: 12 20 12 20;
 }
+/* Name of the page currently shown, e.g. "Accounts". */
 .page-title { -fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #0D264C; }
+/* Round-ish badge with the user's initials at the right of the top bar. */
 .avatar {
     -fx-background-color: #DCEBFF;
     -fx-text-fill: #0D264C;
@@ -160,15 +213,21 @@
     -fx-background-radius: 8;
     -fx-padding: 6 9 6 9;
 }
+/* Bottom strip: white with a hairline on top, carrying the status message. */
 .footer {
     -fx-background-color: white;
     -fx-border-color: #DCE5F0;
     -fx-border-width: 1 0 0 0;
     -fx-padding: 7 18 7 18;
 }
+/* The green "Ready" style status text in the footer. */
 .status-ok { -fx-text-fill: #0F7D50; -fx-font-weight: bold; -fx-font-size: 10px; }
 
 /* ---------- Dashboard ---------- */
+/* The home page for staff: a welcome banner across the top, then a row of
+   coloured summary tiles (the same .stat-card shape UsersView builds). */
+
+/* Wide welcome strip under the top bar, pale blue with a soft edge. */
 .banner {
     -fx-background-color: linear-gradient(to right, #E9F1FC, #F5F9FF);
     -fx-background-radius: 14;
@@ -176,22 +235,32 @@
     -fx-border-radius: 14;
     -fx-padding: 18 22 18 22;
 }
+/* Shared shape of a summary tile: radius, padding and shadow. The colour comes
+   from one of the .stat-* classes added alongside it. */
 .stat-card {
     -fx-background-radius: 14;
     -fx-padding: 14 16 14 16;
     -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.08), 14, 0.1, 0, 3);
 }
+/* One tint per metric, e.g. stat-blue for "Total" and stat-purple for "Admins";
+   the view picks the class name when it builds the tile. */
 .stat-blue   { -fx-background-color: linear-gradient(to bottom right, #EAF2FD, #D8E8FB); }
 .stat-green  { -fx-background-color: linear-gradient(to bottom right, #E4F8EE, #D2F1E2); }
 .stat-pink   { -fx-background-color: linear-gradient(to bottom right, #FDECEC, #FBDCDC); }
 .stat-purple { -fx-background-color: linear-gradient(to bottom right, #F1ECFD, #E6DDFB); }
 .stat-amber  { -fx-background-color: linear-gradient(to bottom right, #FFF4E0, #FDE9C6); }
 .stat-red    { -fx-background-color: linear-gradient(to bottom right, #FDECEC, #FBDCDC); }
+/* Small uppercase caption inside a tile, e.g. "LOCKED / DISABLED". */
 .stat-title { -fx-font-size: 9.5px; -fx-font-weight: bold; -fx-text-fill: #475467; }
+/* The number itself, the largest text on the page. */
 .stat-value { -fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: #0D264C; }
+/* Decorative icon in the corner of a tile. */
 .stat-icon  { -fx-font-size: 20px; -fx-opacity: 0.75; }
 
 /* ---------- Book cards ---------- */
+/* Grid of clickable book cards on the catalog and collection pages. */
+
+/* One book in the grid: white card that reacts to the mouse. */
 .book-card {
     -fx-background-color: white;
     -fx-background-radius: 14;
@@ -200,13 +269,17 @@
     -fx-cursor: hand;
     -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.08), 14, 0.1, 0, 3);
 }
+/* Hover state: blue outline and a deeper shadow, the cue that the card opens. */
 .book-card:hover {
     -fx-border-color: #7FB2E5;
     -fx-effect: dropshadow(gaussian, rgba(31,78,120,0.22), 22, 0.15, 0, 8);
 }
+/* Title line, bold and dark, and the author line under it. */
 .book-title { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #1F2933; }
 .book-author { -fx-font-size: 11.5px; -fx-text-fill: #667085; }
 
+/* Availability pill on a card: green for on-shelf, red for on loan.
+   The fully rounded corners come from the large background radius. */
 .pill-available {
     -fx-background-color: #D9F7E6;
     -fx-text-fill: #0F7D50;
@@ -223,6 +296,7 @@
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
+/* Neutral grey badge for the book type (Printed, E-Book, Archive). */
 .type-badge {
     -fx-background-color: #EEF2F7;
     -fx-text-fill: #475467;
@@ -231,6 +305,7 @@
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
+/* Amber "due soon" and red "overdue" pills, used on loan rows and cards. */
 .pill-soon {
     -fx-background-color: #FFF1D6;
     -fx-text-fill: #A05A00;
@@ -247,10 +322,16 @@
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
+/* Plain due-date text with the same amber/red meaning as the pills. */
 .due-soon { -fx-text-fill: #A05A00; -fx-font-weight: bold; -fx-font-size: 10.5px; }
 .due-overdue { -fx-text-fill: #C0392B; -fx-font-weight: bold; -fx-font-size: 10.5px; }
 
 /* ---------- Role badges ---------- */
+/* The coloured role pill in the account table. UsersView adds "role-" plus the
+   enum name in lower case (role-admin, role-librarian, role-student), so adding
+   a role to the enum needs a matching class here. */
+
+/* Shape shared by all three pills; the colour classes below supply fill and text. */
 .role-pill {
     -fx-background-radius: 20;
     -fx-padding: 3 10 3 10;
@@ -271,14 +352,28 @@
 }
 
 /* ---------- Hints and validation ---------- */
+/* Inline form feedback. FormSupport adds the "field-error" class to a control
+   and to the message label under it while the value is invalid, and removes it
+   once the value is accepted. */
+
+/* The message line under a field, e.g. "Username must be at least 3 letters." */
 .hint-label { -fx-text-fill: #667085; -fx-font-size: 10.5px; }
+/* Selector is scoped to Label on purpose: "field-error" is also added to text
+   fields and combo boxes, and a bare .field-error rule would repaint their text
+   red as well. Here only the message label turns red. */
 Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weight: bold; }
+/* The control itself only gets a red border, never red text, so what the user
+   typed stays readable. One selector per control type keeps this from leaking
+   onto labels or layout containers that carry the same class. */
 .field.field-error,
 .text-field.field-error,
 .password-field.field-error,
 .combo-box.field-error { -fx-border-color: #D64545; }
 
 /* ---------- Circulation desk bar ---------- */
+/* The pale strip at the top of the circulation page holding the barcode field
+   and the issue/return buttons. */
+
 .desk-bar {
     -fx-background-color: #EEF5FE;
     -fx-border-color: #D8E5F6;
@@ -287,32 +382,49 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
 }
 
 /* ---------- Read-only book cards ---------- */
+/* Same card as the catalog, but for a view where clicking does nothing (e.g. a
+   student browsing). The pointer stays an arrow and hover gives no feedback, so
+   the card does not promise an action it cannot perform. */
+
 .book-card-readonly {
     -fx-cursor: default;
 }
+/* Repeats the resting border and shadow so hovering does not change the card. */
 .book-card-readonly:hover {
     -fx-border-color: #E3EAF4;
     -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.08), 14, 0.1, 0, 3);
 }
 
 /* ---------- Scroll panes ---------- */
+/* Every scrollable area: the table body, long forms and card grids. The pane and
+   its inner viewport are made transparent so the page background shows through
+   instead of JavaFX's default grey. */
+
 .scroll-pane, .scroll-pane .viewport { -fx-background-color: transparent; }
 .scroll-pane { -fx-padding: 0; }
+/* Thin, unobtrusive bars: no track, a rounded grey thumb, and no arrow buttons. */
 .scroll-bar:vertical, .scroll-bar:horizontal { -fx-background-color: transparent; }
 .scroll-bar .thumb { -fx-background-color: #C9D6E6; -fx-background-radius: 8; }
 .scroll-bar .increment-button, .scroll-bar .decrement-button { -fx-background-color: transparent; -fx-padding: 0; }
 
 /* ---------- Tables ---------- */
+/* The account table (UsersView), the loans table and the catalog list all use
+   these. The table itself is transparent so the surrounding card supplies the
+   white surface and rounded corners. */
+
 .table-view {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
     -fx-padding: 0;
 }
+/* Header strip: pale blue, rounded only at the top to sit flush with the card. */
 .table-view .column-header-background {
     -fx-background-color: #F3F7FD;
     -fx-background-radius: 10 10 0 0;
 }
+/* One header cell: transparent so the strip above shows through; 38px tall. */
 .table-view .column-header { -fx-background-color: transparent; -fx-size: 38; }
+/* Header text: small, bold, left aligned to line up with the cell content. */
 .table-view .column-header .label {
     -fx-text-fill: #475467;
     -fx-font-weight: bold;
@@ -320,15 +432,19 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-alignment: CENTER-LEFT;
     -fx-padding: 0 0 0 10;
 }
+/* Empty area to the right of the last column, matched to the header colour. */
 .table-view .filler { -fx-background-color: #F3F7FD; }
+/* Body rows: white with a single hairline underneath instead of a full grid. */
 .table-row-cell {
     -fx-background-color: white;
     -fx-border-color: transparent transparent #EEF2F7 transparent;
     -fx-table-cell-border-color: transparent;
     -fx-cell-size: 58;
 }
+/* Alternating tint so the eye can follow a long row across five columns. */
 .table-row-cell:odd { -fx-background-color: #FBFCFE; }
 .table-row-cell:selected { -fx-background-color: #E8F1FD; }
+/* Cell content: left aligned, padded 10px to match the header text. */
 .table-view .table-cell {
     -fx-alignment: CENTER_LEFT;
     -fx-padding: 0 10 0 10;
@@ -336,6 +452,7 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-font-size: 12px;
 }
 
+/* The small navy button inside a table row, e.g. "Borrow" or "Return". */
 .row-btn {
     -fx-background-color: #0D264C;
     -fx-text-fill: white;
@@ -346,10 +463,15 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-cursor: hand;
 }
 .row-btn:hover { -fx-background-color: #17457F; }
+/* Red variant of the same button for a destructive row action. */
 .row-btn-danger { -fx-background-color: #C0392B; }
 .row-btn-danger:hover { -fx-background-color: #A93226; }
 
 /* MenuButton reuses the row button look, including its label and arrow. */
+/* The ">" child selectors reach only the pieces the MenuButton draws itself:
+   its label and its arrow. The dropdown items live in a popup that is not a
+   child of the button, so they are styled separately below and are not made
+   white-on-navy by accident. */
 .menu-button.row-btn { -fx-padding: 0; }
 .menu-button.row-btn > .label {
     -fx-text-fill: white;
@@ -358,8 +480,10 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-padding: 6 8 6 12;
 }
 .menu-button.row-btn > .arrow-button { -fx-padding: 0 8 0 2; }
+/* The arrow is drawn as a shape, so it needs -fx-background-color, not -fx-fill. */
 .menu-button.row-btn > .arrow-button > .arrow { -fx-background-color: white; }
 .menu-button.row-btn:hover { -fx-background-color: #17457F; }
+/* The dropdown panel that opens from the Manage button. */
 .menu-button.row-btn .context-menu {
     -fx-background-color: white;
     -fx-background-radius: 8;
@@ -367,6 +491,7 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-border-radius: 8;
     -fx-effect: dropshadow(gaussian, rgba(16,32,52,0.16), 16, 0.12, 0, 6);
 }
+/* Items inside that panel are dark text on white; the focused item gets a tint. */
 .menu-button.row-btn .menu-item .label {
     -fx-text-fill: #1F2933;
     -fx-font-size: 11.5px;
@@ -376,26 +501,36 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
 .menu-button.row-btn .menu-item:focused .label { -fx-text-fill: #0D264C; }
 
 /* ---------- Dialogs ---------- */
+/* Every modal dialog in the app (New Account, Change role, Reset password,
+   confirmations). Dialogs.style() adds no class; these are JavaFX's own names. */
+
 .dialog-pane {
     -fx-background-color: white;
     -fx-font-family: "SansSerif";
 }
+/* Header strip behind the dialog title. */
 .dialog-pane .header-panel { -fx-background-color: #F3F7FD; }
 .dialog-pane .header-panel .label { -fx-text-fill: #0D264C; -fx-font-weight: bold; }
 
 /* ---------- Frameless window chrome ---------- */
+/* The app hides the operating system title bar and draws its own, so these
+   classes belong to that custom frame: the outer border, the title strip and the
+   minimise / maximise / close buttons. */
+
 .window-frame {
     -fx-background-color: #FFFFFF;
     -fx-border-color: #D7DEEA;
     -fx-border-width: 1;
 }
 
+/* Strip along the top of the window that the user drags to move it. */
 .title-bar {
     -fx-background-color: #FFFFFF;
     -fx-border-color: transparent transparent #E4E9F2 transparent;
     -fx-border-width: 0 0 1 0;
 }
 
+/* App name shown on the left of the title strip. */
 .title-text {
     -fx-font-family: "SansSerif";
     -fx-font-size: 12.5px;
@@ -403,6 +538,7 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-text-fill: #22334D;
 }
 
+/* A title-bar button; the square hit area is set by the view, not here. */
 .win-btn {
     -fx-background-color: transparent;
     -fx-background-radius: 0;
@@ -411,6 +547,8 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
 }
 .win-btn:hover { -fx-background-color: #EDF1F8; }
 
+/* The icon is drawn as an SVG path, so it is stroked rather than filled:
+   -fx-fill clears any fill and -fx-stroke draws the lines. */
 .win-icon {
     -fx-fill: transparent;
     -fx-stroke: #46587A;
@@ -418,10 +556,16 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
     -fx-stroke-line-cap: round;
 }
 
+/* Close button: red background on hover, and the stroke turns white so the X
+   stays visible. The second rule restyles the child icon of the hovered button. */
 .win-close:hover { -fx-background-color: #D64545; }
 .win-close:hover .win-icon { -fx-stroke: white; }
 
 /* ---------- Toasts ---------- */
+/* The small message card that slides in at the bottom-right after an action
+   (MainView.toastSuccess / toastError). The base .toast is the white card; a
+   second class sets the border colour to match the outcome. */
+
 .toast {
     -fx-background-color: white;
     -fx-background-radius: 12;
@@ -434,6 +578,7 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
 .toast-info    { -fx-border-color: #B9D5F5; }
 .toast-error   { -fx-border-color: #F0B8B3; }
 
+/* The round icon badge inside a toast: shared shape, then one fill per outcome. */
 .toast-icon {
     -fx-min-width: 22;
     -fx-min-height: 22;
@@ -450,26 +595,38 @@ Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weig
 .toast-text { -fx-text-fill: #1F2933; -fx-font-size: 12px; }
 
 /* ---------- Empty states ---------- */
+/* Shown in place of a table or grid that has no rows: a large icon, a title and
+   one line of advice, plus an optional button (EmptyState.host). */
+
 .empty-state { -fx-background-color: transparent; }
 .empty-icon  { -fx-font-size: 30px; -fx-text-fill: #A9BCD3; }
 .empty-title { -fx-text-fill: #0D264C; }
 .empty-text  { -fx-text-fill: #667085; }
 
 /* ---------- Due-date urgency ---------- */
+/* Loan rows are coloured by how close the due date is. The class is put on the
+   whole TableRow, so the left-hand border marks the row rather than one cell. */
+
 .due-normal { -fx-text-fill: #0F7D50; -fx-font-weight: bold; -fx-font-size: 10.5px; }
 
+/* Red 3px bar on the left of an overdue row; the other three sides stay as the
+   usual hairline so the row still lines up with its neighbours. */
 .table-row-cell.row-overdue {
     -fx-border-color: transparent transparent #EEF2F7 #D64545;
     -fx-border-width: 0 0 1 3;
 }
+/* Amber bar for a loan that is due soon. */
 .table-row-cell.row-soon {
     -fx-border-color: transparent transparent #EEF2F7 #E0A32E;
     -fx-border-width: 0 0 1 3;
 }
+/* Blue bar for a book that is currently out. */
 .table-row-cell.row-out {
     -fx-border-color: transparent transparent #EEF2F7 #7FB2E5;
     -fx-border-width: 0 0 1 3;
 }
+/* Selected versions of those rows: the tint matches the bar colour, so the
+   selection is obvious without hiding which urgency the row had. */
 .table-row-cell.row-overdue:selected { -fx-background-color: #FBE9E8; }
 .table-row-cell.row-soon:selected    { -fx-background-color: #FDF4E4; }
 .table-row-cell.row-out:selected     { -fx-background-color: #E8F1FD; }
