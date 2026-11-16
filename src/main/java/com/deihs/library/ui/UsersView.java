@@ -4,6 +4,8 @@ import com.deihs.library.dao.DaoException;
 import com.deihs.library.dao.UserDao;
 import com.deihs.library.model.Role;
 import com.deihs.library.util.Validation;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -527,21 +529,19 @@ public class UsersView extends VBox {
         username.getStyleClass().add("field");
         username.setPrefHeight(38);
 
-        Label usernameHint = new Label("Letters only \u2014 no numbers or symbols.");
-        usernameHint.getStyleClass().add("hint-label");
-        usernameHint.setWrapText(true);
-        username.textProperty().addListener((o, a, b) -> {
-            String problem = Validation.usernameProblem(b);
-            usernameHint.setText(problem == null
-                    ? "Looks good." : problem);
-            usernameHint.getStyleClass().removeAll("hint-label", "field-error");
-            usernameHint.getStyleClass().add(problem == null ? "hint-label" : "field-error");
-        });
+        Label usernameHint = hintLabel();
+        FormSupport.TextRule usernameRule = new FormSupport.TextRule(username, usernameHint,
+                () -> Validation.usernameProblem(username.getText()),
+                "Letters only \u2014 no numbers or symbols.");
 
         TextField displayName = new TextField();
         displayName.setPromptText("Full name shown in the app");
         displayName.getStyleClass().add("field");
         displayName.setPrefHeight(38);
+
+        Label displayNameHint = hintLabel();
+        FormSupport.TextRule displayNameRule = new FormSupport.TextRule(displayName, displayNameHint,
+                () -> Validation.displayNameProblem(displayName.getText()));
 
         ComboBox<Role> role = new ComboBox<>();
         role.getItems().setAll(Role.values());
@@ -556,64 +556,70 @@ public class UsersView extends VBox {
         password.getStyleClass().add("field");
         password.setPrefHeight(38);
 
+        Label passwordHint = hintLabel();
+        FormSupport.TextRule passwordRule = new FormSupport.TextRule(password, passwordHint,
+                () -> Validation.passwordProblem(password.getText()));
+
         PasswordField confirm = new PasswordField();
         confirm.setPromptText("Repeat the password");
         confirm.getStyleClass().add("field");
         confirm.setPrefHeight(38);
 
+        Label confirmHint = hintLabel();
+        FormSupport.TextRule confirmRule = new FormSupport.TextRule(confirm, confirmHint,
+                () -> {
+                    String value = confirm.getText() == null ? "" : confirm.getText();
+                    if (value.isEmpty()) {
+                        return "Please repeat the password.";
+                    }
+                    return value.equals(password.getText())
+                            ? null : "The two passwords do not match.";
+                });
+        password.textProperty().addListener((o, a, b) -> confirmRule.recheck());
+
+        BooleanBinding valid = Bindings.createBooleanBinding(
+                () -> usernameRule.problem() == null
+                        && displayNameRule.problem() == null
+                        && passwordRule.problem() == null
+                        && confirmRule.problem() == null,
+                username.textProperty(), displayName.textProperty(),
+                password.textProperty(), confirm.textProperty());
+
         GridPane form = new GridPane();
         form.setHgap(12);
         form.setVgap(10);
         form.setPadding(new Insets(6, 4, 4, 4));
-        form.addRow(0, fieldLabel("Username"), username);
-        form.addRow(1, new Label(), usernameHint);
-        form.addRow(2, fieldLabel("Display name"), displayName);
-        form.addRow(3, fieldLabel("Role"), role);
-        form.addRow(4, fieldLabel("Password"), password);
-        form.addRow(5, fieldLabel("Confirm"), confirm);
+        form.addRow(0, fieldLabel("Username"), fieldBlock(username, usernameHint));
+        form.addRow(1, fieldLabel("Display name"), fieldBlock(displayName, displayNameHint));
+        form.addRow(2, fieldLabel("Role"), role);
+        form.addRow(3, fieldLabel("Password"), fieldBlock(password, passwordHint));
+        form.addRow(4, fieldLabel("Confirm"), fieldBlock(confirm, confirmHint));
 
         Label error = new Label(" ");
         error.getStyleClass().add("error-label");
         error.setWrapText(true);
         error.setMinHeight(28);
-        form.add(error, 1, 6);
+        form.add(error, 1, 5);
 
-        GridPane.setHgrow(username, Priority.ALWAYS);
-        GridPane.setHgrow(displayName, Priority.ALWAYS);
         GridPane.setHgrow(role, Priority.ALWAYS);
-        GridPane.setHgrow(password, Priority.ALWAYS);
-        GridPane.setHgrow(confirm, Priority.ALWAYS);
 
         dialog.getDialogPane().setContent(form);
 
         Node createButton = dialog.getDialogPane().lookupButton(createType);
-        if (createButton != null) {
-            createButton.addEventFilter(ActionEvent.ACTION, event -> {
-                String problem = Validation.usernameProblem(username.getText());
-                if (problem != null) {
-                    error.setText(problem);
-                    event.consume();
-                    return;
-                }
-                problem = Validation.displayNameProblem(displayName.getText());
-                if (problem != null) {
-                    error.setText(problem);
-                    event.consume();
-                    return;
-                }
-                problem = Validation.passwordProblem(password.getText());
-                if (problem != null) {
-                    error.setText(problem);
-                    event.consume();
-                    return;
-                }
-                if (!password.getText().equals(confirm.getText())) {
-                    error.setText("The two passwords do not match.");
+        if (createButton instanceof Button create) {
+            create.disableProperty().bind(valid.not());
+            create.addEventFilter(ActionEvent.ACTION, event -> {
+                usernameRule.touch();
+                displayNameRule.touch();
+                passwordRule.touch();
+                confirmRule.touch();
+                if (!valid.get()) {
                     event.consume();
                     return;
                 }
                 try {
                     if (dao.exists(username.getText())) {
+                        FormSupport.markInvalid(username, true);
                         error.setText("That username is already taken.");
                         event.consume();
                     }
@@ -624,6 +630,15 @@ public class UsersView extends VBox {
             });
         }
 
+        FormSupport.DirtyGuard guard = new FormSupport.DirtyGuard(
+                "This account has not been created yet. Close without saving?");
+        guard.watch(username.textProperty());
+        guard.watch(displayName.textProperty());
+        guard.watch(role.valueProperty());
+        guard.watch(password.textProperty());
+        guard.watch(confirm.textProperty());
+        guard.install(dialog, ButtonType.CANCEL);
+
         dialog.setResultConverter(button -> button == createType
                 ? new NewAccount(username.getText().trim(),
                         displayName.getText() == null || displayName.getText().isBlank()
@@ -631,6 +646,7 @@ public class UsersView extends VBox {
                         password.getText(),
                         role.getValue() == null ? Role.STUDENT : role.getValue())
                 : null);
+        FormSupport.focus(username);
         return dialog.showAndWait().orElse(null);
     }
 
@@ -663,7 +679,18 @@ public class UsersView extends VBox {
         box.setPrefWidth(380);
         dialog.getDialogPane().setContent(box);
 
+        Node saveButton = dialog.getDialogPane().lookupButton(saveType);
+        if (saveButton instanceof Button save) {
+            save.disableProperty().bind(role.valueProperty().isNull());
+        }
+
+        FormSupport.DirtyGuard guard = new FormSupport.DirtyGuard(
+                "The role has not been changed yet. Close without saving?");
+        guard.watch(role.valueProperty());
+        guard.install(dialog, ButtonType.CANCEL);
+
         dialog.setResultConverter(button -> button == saveType ? role.getValue() : null);
+        FormSupport.focus(role);
         return dialog.showAndWait().orElse(null);
     }
 
@@ -682,39 +709,64 @@ public class UsersView extends VBox {
         password.getStyleClass().add("field");
         password.setPrefHeight(38);
 
+        Label passwordHint = hintLabel();
+        FormSupport.TextRule passwordRule = new FormSupport.TextRule(password, passwordHint,
+                () -> Validation.passwordProblem(password.getText()));
+
         PasswordField confirm = new PasswordField();
         confirm.setPromptText("Repeat the password");
         confirm.getStyleClass().add("field");
         confirm.setPrefHeight(38);
+
+        Label confirmHint = hintLabel();
+        FormSupport.TextRule confirmRule = new FormSupport.TextRule(confirm, confirmHint,
+                () -> {
+                    String value = confirm.getText() == null ? "" : confirm.getText();
+                    if (value.isEmpty()) {
+                        return "Please repeat the password.";
+                    }
+                    return value.equals(password.getText())
+                            ? null : "The two passwords do not match.";
+                });
+        password.textProperty().addListener((o, a, b) -> confirmRule.recheck());
+
+        BooleanBinding valid = Bindings.createBooleanBinding(
+                () -> passwordRule.problem() == null && confirmRule.problem() == null,
+                password.textProperty(), confirm.textProperty());
 
         Label error = new Label(" ");
         error.getStyleClass().add("error-label");
         error.setWrapText(true);
         error.setMinHeight(28);
 
-        VBox box = new VBox(8, fieldLabel("New password"), password,
-                fieldLabel("Confirm password"), confirm, error);
+        VBox box = new VBox(6,
+                fieldLabel("New password"), password, passwordHint,
+                fieldLabel("Confirm password"), confirm, confirmHint,
+                error);
         box.setPadding(new Insets(6, 4, 4, 4));
         box.setPrefWidth(400);
         dialog.getDialogPane().setContent(box);
 
         Node saveButton = dialog.getDialogPane().lookupButton(saveType);
-        if (saveButton != null) {
-            saveButton.addEventFilter(ActionEvent.ACTION, event -> {
-                String problem = Validation.passwordProblem(password.getText());
-                if (problem != null) {
-                    error.setText(problem);
-                    event.consume();
-                    return;
-                }
-                if (!password.getText().equals(confirm.getText())) {
-                    error.setText("The two passwords do not match.");
+        if (saveButton instanceof Button save) {
+            save.disableProperty().bind(valid.not());
+            save.addEventFilter(ActionEvent.ACTION, event -> {
+                passwordRule.touch();
+                confirmRule.touch();
+                if (!valid.get()) {
                     event.consume();
                 }
             });
         }
 
+        FormSupport.DirtyGuard guard = new FormSupport.DirtyGuard(
+                "The new password has not been saved. Close without saving?");
+        guard.watch(password.textProperty());
+        guard.watch(confirm.textProperty());
+        guard.install(dialog, ButtonType.CANCEL);
+
         dialog.setResultConverter(button -> button == saveType ? password.getText() : null);
+        FormSupport.focus(password);
         return dialog.showAndWait().orElse(null);
     }
 
@@ -722,6 +774,26 @@ public class UsersView extends VBox {
         Label label = new Label(text);
         label.getStyleClass().add("field-label");
         return label;
+    }
+
+    private static Label hintLabel() {
+        Label hint = new Label();
+        hint.getStyleClass().add("hint-label");
+        hint.setWrapText(true);
+        hint.setVisible(false);
+        hint.setManaged(false);
+        return hint;
+    }
+
+    /** A control with its inline message directly underneath. */
+    private static VBox fieldBlock(Node control, Label hint) {
+        if (control instanceof Region region) {
+            region.setMaxWidth(Double.MAX_VALUE);
+        }
+        VBox box = new VBox(3, control, hint);
+        box.setFillWidth(true);
+        box.setMaxWidth(Double.MAX_VALUE);
+        return box;
     }
 
     private static StringConverter<Role> roleConverter() {

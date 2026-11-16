@@ -272,9 +272,11 @@
 
 /* ---------- Hints and validation ---------- */
 .hint-label { -fx-text-fill: #667085; -fx-font-size: 10.5px; }
-.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weight: bold; }
+Label.field-error { -fx-text-fill: #C0392B; -fx-font-size: 10.5px; -fx-font-weight: bold; }
 .field.field-error,
-.text-field.field-error { -fx-border-color: #D64545; }
+.text-field.field-error,
+.password-field.field-error,
+.combo-box.field-error { -fx-border-color: #D64545; }
 
 /* ---------- Circulation desk bar ---------- */
 .desk-bar {

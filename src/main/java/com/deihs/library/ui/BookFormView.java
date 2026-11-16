@@ -4,6 +4,9 @@ import com.deihs.library.dao.BookDao;
 import com.deihs.library.dao.DaoException;
 import com.deihs.library.model.Book;
 import com.deihs.library.util.Covers;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -17,6 +20,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -45,6 +49,9 @@ public final class BookFormView {
 
         ButtonType saveType = new ButtonType(isNew ? "Add Book" : "Save Changes", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+
+        FormSupport.DirtyGuard guard = new FormSupport.DirtyGuard(
+                "You have not saved this book yet. Close without saving?");
 
         TextField title = new TextField(existing == null ? "" : existing.getTitle());
         title.setPromptText("Book title");
@@ -132,6 +139,7 @@ public final class BookFormView {
             if (file != null) {
                 picked[0] = file;
                 removeCover[0] = false;
+                guard.markDirty();
                 refreshPreview.run();
             }
         });
@@ -142,6 +150,7 @@ public final class BookFormView {
         clear.setOnAction(e -> {
             picked[0] = null;
             removeCover[0] = true;
+            guard.markDirty();
             refreshPreview.run();
         });
 
@@ -159,14 +168,32 @@ public final class BookFormView {
         category.getEditor().textProperty().addListener((o, a, b) -> refreshPreview.run());
 
         // ---------------- Form ----------------
+        Label titleHint = hintLabel();
+        Label authorHint = hintLabel();
+        Label categoryHint = hintLabel();
+
+        FormSupport.TextRule titleRule = new FormSupport.TextRule(title, titleHint,
+                () -> isBlank(title.getText()) ? "Please enter the book title." : null);
+        FormSupport.TextRule authorRule = new FormSupport.TextRule(author, authorHint,
+                () -> isBlank(author.getText()) ? "Please enter the author." : null);
+        FormSupport.TextRule categoryRule = new FormSupport.TextRule(category.getEditor(), categoryHint,
+                () -> isBlank(category.getEditor().getText())
+                        ? "Please choose or type a category." : null);
+
+        BooleanBinding valid = Bindings.createBooleanBinding(
+                () -> titleRule.problem() == null
+                        && authorRule.problem() == null
+                        && categoryRule.problem() == null,
+                title.textProperty(), author.textProperty(), category.getEditor().textProperty());
+
         GridPane form = new GridPane();
         form.setHgap(12);
         form.setVgap(10);
         form.setPadding(new Insets(2, 4, 4, 4));
 
-        form.addRow(0, fieldLabel("Title"), title);
-        form.addRow(1, fieldLabel("Author"), author);
-        form.addRow(2, fieldLabel("Category"), category);
+        form.addRow(0, fieldLabel("Title"), fieldBlock(title, titleHint));
+        form.addRow(1, fieldLabel("Author"), fieldBlock(author, authorHint));
+        form.addRow(2, fieldLabel("Category"), fieldBlock(category, categoryHint));
         form.addRow(3, fieldLabel("Type"), type);
         form.addRow(4, fieldLabel("Details"), extra);
 
@@ -176,9 +203,6 @@ public final class BookFormView {
         error.setMinHeight(26);
         form.add(error, 1, 5);
 
-        GridPane.setHgrow(title, Priority.ALWAYS);
-        GridPane.setHgrow(author, Priority.ALWAYS);
-        GridPane.setHgrow(category, Priority.ALWAYS);
         GridPane.setHgrow(type, Priority.ALWAYS);
         GridPane.setHgrow(extra, Priority.ALWAYS);
 
@@ -192,27 +216,21 @@ public final class BookFormView {
         final Book[] result = {null};
 
         Node saveButton = dialog.getDialogPane().lookupButton(saveType);
-        if (saveButton != null) {
-            saveButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
-                String name = title.getText() == null ? "" : title.getText().trim();
-                String writer = author.getText() == null ? "" : author.getText().trim();
-                String genre = category.getEditor().getText() == null ? "" : category.getEditor().getText().trim();
+        if (saveButton instanceof Button save) {
+            save.disableProperty().bind(valid.not());
+            save.addEventFilter(ActionEvent.ACTION, event -> {
+                titleRule.touch();
+                authorRule.touch();
+                categoryRule.touch();
+                if (!valid.get()) {
+                    error.setText("Please fix the highlighted fields.");
+                    event.consume();
+                    return;
+                }
 
-                if (name.isEmpty()) {
-                    error.setText("Please enter the book title.");
-                    event.consume();
-                    return;
-                }
-                if (writer.isEmpty()) {
-                    error.setText("Please enter the author.");
-                    event.consume();
-                    return;
-                }
-                if (genre.isEmpty()) {
-                    error.setText("Please choose or type a category.");
-                    event.consume();
-                    return;
-                }
+                String name = title.getText().trim();
+                String writer = author.getText().trim();
+                String genre = category.getEditor().getText().trim();
 
                 Book book = existing == null ? new Book() : existing;
                 book.setTitle(name);
@@ -243,7 +261,15 @@ public final class BookFormView {
             });
         }
 
+        guard.watch(title.textProperty());
+        guard.watch(author.textProperty());
+        guard.watch(category.getEditor().textProperty());
+        guard.watch(type.valueProperty());
+        guard.watch(extra.textProperty());
+        guard.install(dialog, ButtonType.CANCEL);
+
         dialog.setResultConverter(button -> button == saveType ? result[0] : null);
+        FormSupport.focus(title);
         return dialog.showAndWait().orElse(null);
     }
 
@@ -251,6 +277,30 @@ public final class BookFormView {
         Label label = new Label(text);
         label.getStyleClass().add("field-label");
         return label;
+    }
+
+    private static Label hintLabel() {
+        Label hint = new Label();
+        hint.getStyleClass().add("hint-label");
+        hint.setWrapText(true);
+        hint.setVisible(false);
+        hint.setManaged(false);
+        return hint;
+    }
+
+    /** A control with its inline message directly underneath. */
+    private static VBox fieldBlock(Node control, Label hint) {
+        if (control instanceof Region region) {
+            region.setMaxWidth(Double.MAX_VALUE);
+        }
+        VBox box = new VBox(3, control, hint);
+        box.setFillWidth(true);
+        box.setMaxWidth(Double.MAX_VALUE);
+        return box;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private static String blankTo(String value, String fallback) {
