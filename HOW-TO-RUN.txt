@@ -1,0 +1,37 @@
+DEIHS Library Management System - local setup
+=============================================
+
+Project folder:
+  C:\Users\User\deihs-library-management-system
+
+HOW TO RUN
+  1. Double-click: run-app.cmd
+     It starts the MariaDB database on port 3307, then launches the app.
+  2. Or in VS Code:
+     - Open this folder
+     - Press Ctrl+Shift+B  (task: "DEIHS: Run Library System")
+
+DEMO ACCOUNTS
+  admin      / admin123      (Administrator)
+  librarian  / librarian123  (Librarian)
+  student    / student123    (Student)
+
+DATABASE
+  MariaDB 11.4 portable: C:\Users\User\tools\mariadb-11.4.8-winx64
+  Data folder:           C:\Users\User\tools\mariadb-data
+  Port:                  3307
+  Database name:         deihs_library
+  User:                  root  (no password)
+  Connection settings:   src\main\resources\db.properties
+
+  Re-import the schema if needed:
+  "C:\Users\User\tools\mariadb-11.4.8-winx64\bin\mysql.exe" -h 127.0.0.1 -P 3307 -u root < database\schema.sql
+
+TOOLCHAIN
+  Java:  C:\Program Files\Java\jdk-26.0.1
+  Maven: C:\Users\User\tools\apache-maven-3.9.16
+
+NOTES
+  - Your existing MySQL 8.4 on port 3306 was left untouched.
+  - One upstream bug was fixed for the project to compile:
+    BookDao.java was missing findById(int), which CirculationView calls.

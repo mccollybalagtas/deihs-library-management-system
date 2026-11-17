@@ -103,6 +103,25 @@ public final class BookDao {
     }
 
     /**
+     * WHAT: Loads one book by its primary key.
+     * WHY: The circulation scan field resolves a scanned ID before acting on it.
+     * CALLED BY: CirculationView.scanBook().
+     */
+    public Book findById(int bookId) throws DaoException {
+        String sql = "SELECT * FROM books WHERE id = ?";
+        try (Connection c = Db.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, bookId);
+            try (ResultSet rs = ps.executeQuery()) {
+                // A missing row is a normal outcome: the caller shows "no book".
+                return rs.next() ? map(rs) : null;
+            }
+        } catch (SQLException ex) {
+            throw new DaoException("Could not look up that book.\n" + ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * WHAT: Every book currently on loan to one account.
      * WHY: A student must see only their own loans, matched on borrower_id rather
      * than the display name.
