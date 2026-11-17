@@ -71,6 +71,7 @@ public class MainView extends BorderPane {
     private CirculationView circulation;
     private CatalogView catalog;
     private MyLoansView myLoans;
+    private AvailableBooksView available;
     private UsersView users;
 
     /**
@@ -165,8 +166,16 @@ public class MainView extends BorderPane {
                 }
             }
             case "myloans" -> {
-                if (myLoans != null) {
-                    myLoans.focusSearch();
+                // My Loans has no search box; Ctrl+F takes the student to the
+                // shelf page, which owns the search field.
+                navigate("available");
+                if (available != null) {
+                    available.focusSearch();
+                }
+            }
+            case "available" -> {
+                if (available != null) {
+                    available.focusSearch();
                 }
             }
             case "catalog" -> {
@@ -217,6 +226,7 @@ public class MainView extends BorderPane {
             case "collection" -> "Book Collection";
             case "circulation" -> "Circulation";
             case "myloans" -> "My Loans";
+            case "available" -> "Available Books";
             case "catalog" -> "Catalog";
             case "users" -> "Accounts";
             default -> "Library Dashboard";
@@ -257,6 +267,14 @@ public class MainView extends BorderPane {
                     myLoans.refresh();
                 }
                 content.getChildren().setAll(myLoans);
+            }
+            case "available" -> {
+                if (available == null) {
+                    available = new AvailableBooksView(this);
+                } else {
+                    available.refresh();
+                }
+                content.getChildren().setAll(available);
             }
             case "catalog" -> {
                 if (catalog == null) {
@@ -300,6 +318,7 @@ public class MainView extends BorderPane {
         circulation = null;
         catalog = null;
         myLoans = null;
+        available = null;
         users = null;
         navigate(currentKey);
     }
@@ -406,8 +425,10 @@ public class MainView extends BorderPane {
             sidebar.getChildren().add(navButton("circulation", "\u21C4", "Circulation"));
         }
         if (user.getRole().canBorrowForSelf()) {
-            // Students get their own loans page instead of the desk page.
+            // Students get their own loans page and a separate shelf page
+            // instead of the staff circulation desk.
             sidebar.getChildren().add(navButton("myloans", "\u21C4", "My Loans"));
+            sidebar.getChildren().add(navButton("available", "\u2795", "Available Books"));
         }
         // Every role may browse the catalog.
         sidebar.getChildren().add(navButton("catalog", "\u2630", "Catalog"));

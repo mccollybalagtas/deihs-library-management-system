@@ -28,8 +28,8 @@ offer an action the role may not perform.
 | Manage accounts (roles, passwords, lockout) | ✅ | — | — |
 
 Students are limited to **3 books at a time** and a **7-day loan**. They never
-see the circulation desk or other students' loans; the **My Loans** page is
-their whole workflow.
+see the circulation desk or other students' loans; **My Loans** lists the books
+they hold, and **Available Books** is a separate page for browsing and borrowing.
 
 Librarians see the **Circulation** desk, which lets them pick a student, issue a
 book with a due date, and return it — plus a filter for available, on-loan and
@@ -48,7 +48,8 @@ desk, and the **Accounts** page for creating users and changing roles.
 | **Dashboard** | Staff see live counters (total titles, available, on loan, overdue, categories, users); students see their own loan count, due-soon and overdue totals. |
 | **Collection** | Full grid of book covers with title, author, category and availability. Administrators click any cover to edit the title; other roles see a read-only grid. |
 | **Circulation** | Staff pick a student, then issue or return books. Availability, borrower, due date and loan state are saved immediately. |
-| **My Loans** | Students borrow from the available shelves and return their own books, with the 3-book limit and due dates enforced. |
+| **My Loans** | Students see their own borrowed books, due dates and status, and return them here. |
+| **Available Books** | A separate student page for searching the free shelves and borrowing a title, with the 3-book limit enforced. |
 | **Catalog** | Searchable table of every title. Administrators can add, edit and delete titles, including cover images. |
 | **Accounts** | Administrators create accounts, change roles, reset passwords, unlock locked accounts, disable accounts, and delete accounts. |
 | **Cover photos** | Upload a JPG/PNG for any book. When a title has no cover, the app draws a gradient placeholder jacket so the grid never looks broken. |
@@ -178,7 +179,7 @@ jar.
 | --- | --- | --- | --- |
 | `admin` | `admin123` | Administrator | Everything, including the Accounts page |
 | `librarian` | `librarian123` | Librarian | Dashboard, Circulation, Catalog |
-| `student` | `student123` | Student | Dashboard, My Loans, Catalog |
+| `student` | `student123` | Student | Dashboard, My Loans, Available Books, Catalog |
 
 > Change these passwords before the system is used by real staff. An
 > administrator can reset any password from **Accounts → Manage**.
@@ -249,8 +250,8 @@ Balagtas DEIHS Library Management System/
     │   ├── model/               User, Book, Role (permission matrix)
     │   ├── ui/                  LoginView, MainView, DashboardView,
     │   │                        CollectionPanel, CirculationView,
-    │   │                        MyLoansView, UsersView, CatalogView,
-    │   │                        BookFormView, BookCard
+    │   │                        MyLoansView, AvailableBooksView, UsersView,
+    │   │                        CatalogView, BookFormView, BookCard
     │   └── util/                Covers, Passwords, Validation
     └── resources/
         ├── css/app.css          Complete visual theme
@@ -273,7 +274,8 @@ Balagtas DEIHS Library Management System/
   the source of truth. Refreshing a page re-queries MySQL.
 - **Loans** — `books.borrowed`, `borrower_id`, `borrower`, `borrowed_at` and
   `due_at` track the loan. Staff flip them from the Circulation desk; students
-  flip them from My Loans. A borrower may hold at most `Book.MAX_LOANS` (3)
+  borrow from Available Books and return from My Loans. A borrower may hold at
+  most `Book.MAX_LOANS` (3)
   titles at once, and a loan is due `Book.LOAN_DAYS` (7) days after issue.
 - **Editing** — clicking a cover or using **Edit** in the Catalog opens the same
   form; it returns a `Book` and the caller saves it, so add and edit behave
